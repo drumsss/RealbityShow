@@ -1,0 +1,442 @@
+import { useEffect, useState } from "react";
+import {
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+
+import { router } from "expo-router";
+import { db } from "../firebase";
+import { getUser } from "./session";
+
+import {
+  doc,
+  getDoc,
+  increment,
+  setDoc,
+  updateDoc
+} from "firebase/firestore";
+
+export default function Admin() {
+
+  const [playerName, setPlayerName] = useState("");
+  const [points, setPoints] = useState("");
+
+  const [day, setDay] = useState("");
+  const [challenge, setChallenge] = useState("");
+
+  const [minutes, setMinutes] = useState("");
+
+  const challengeRef = doc(db, "challenge", "current");
+
+  useEffect(() => {
+
+    const check = async () => {
+
+      const u = await getUser();
+
+      if (u !== "drums") {
+        router.replace("/(tabs)");
+      }
+
+    };
+
+    check();
+
+  }, []);
+
+  const playerRef = (name) =>
+    doc(db, "players", name.toLowerCase());
+
+  // ➕ AGGIUNGI PUNTI
+  const addPoints = async () => {
+
+    if (!playerName || !points) return;
+
+    const pts = parseInt(points);
+
+    const ref = playerRef(playerName);
+
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) {
+
+      await setDoc(ref, {
+        name: playerName.toLowerCase(),
+        team: "licatadrums",
+        points: 0
+      });
+
+    }
+
+    const data = (await getDoc(ref)).data();
+
+    await updateDoc(ref, {
+      points: increment(pts)
+    });
+
+    await updateDoc(doc(db, "teams", data.team), {
+      totalPoints: increment(pts)
+    });
+
+    setPlayerName("");
+    setPoints("");
+  };
+
+  // ➖ RIMUOVI PUNTI
+  const removePoints = async () => {
+
+    if (!playerName || !points) return;
+
+    const pts = parseInt(points);
+
+    const ref = playerRef(playerName);
+
+    const snap = await getDoc(ref);
+
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+
+    await updateDoc(ref, {
+      points: increment(-pts)
+    });
+
+    await updateDoc(doc(db, "teams", data.team), {
+      totalPoints: increment(-pts)
+    });
+
+    setPlayerName("");
+    setPoints("");
+  };
+
+  // 📅 SFIDE
+  const updateChallenge = async () => {
+
+    if (!day || !challenge) return;
+
+    await setDoc(
+      doc(db, "calendar", day.toLowerCase().trim()),
+      {
+        title: challenge
+      }
+    );
+
+    setDay("");
+    setChallenge("");
+  };
+
+  // ⏱ TIMER
+  const startTimer = async () => {
+
+    const min = parseInt(minutes);
+
+    if (!min) return;
+
+    const end = Date.now() + min * 60 * 1000;
+
+    await setDoc(challengeRef, {
+      active: true,
+      endTime: end,
+      duration: min
+    });
+
+  };
+
+  const stopTimer = async () => {
+
+    await updateDoc(challengeRef, {
+      active: false
+    });
+
+  };
+
+  const resetTimer = async () => {
+
+    await setDoc(challengeRef, {
+      active: false,
+      endTime: 0,
+      duration: 0
+    });
+
+  };
+
+  return (
+
+    <View style={styles.container}>
+
+      {/* FRECCIA */}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={styles.backBtn}
+      >
+
+        <Text style={styles.backText}>
+          ←
+        </Text>
+
+      </TouchableOpacity>
+
+      <Text style={styles.title}>
+        CONTROL ROOM
+      </Text>
+
+      <ScrollView>
+
+        {/* PUNTI */}
+        <View style={styles.card}>
+
+          <Text style={styles.section}>
+            PUNTI PLAYER
+          </Text>
+
+          <TextInput
+            value={playerName}
+            onChangeText={setPlayerName}
+            placeholder="giocatore"
+            placeholderTextColor="#666"
+            style={styles.input}
+          />
+
+          <TextInput
+            value={points}
+            onChangeText={setPoints}
+            placeholder="punti"
+            placeholderTextColor="#666"
+            keyboardType="numeric"
+            style={styles.input}
+          />
+
+          <View style={{ flexDirection: "row" }}>
+
+            {/* + */}
+            <TouchableOpacity
+              onPress={addPoints}
+              style={styles.greenBtn}
+            >
+
+              <Text style={styles.darkBtnText}>
+                + ADD
+              </Text>
+
+            </TouchableOpacity>
+
+            {/* - */}
+            <TouchableOpacity
+              onPress={removePoints}
+              style={styles.redBtn}
+            >
+
+              <Text style={styles.btnText}>
+                - REMOVE
+              </Text>
+
+            </TouchableOpacity>
+
+          </View>
+
+        </View>
+
+        {/* CALENDARIO */}
+        <View style={styles.card}>
+
+          <Text style={styles.section}>
+            SFIDE SETTIMANA
+          </Text>
+
+          <TextInput
+            value={day}
+            onChangeText={setDay}
+            placeholder="monday"
+            placeholderTextColor="#666"
+            style={styles.input}
+          />
+
+          <TextInput
+            value={challenge}
+            onChangeText={setChallenge}
+            placeholder="sfida"
+            placeholderTextColor="#666"
+            style={styles.input}
+          />
+
+          <TouchableOpacity
+            onPress={updateChallenge}
+            style={styles.yellowBtn}
+          >
+
+            <Text style={styles.darkBtnText}>
+              SALVA SFIDA
+            </Text>
+
+          </TouchableOpacity>
+
+        </View>
+
+        {/* TIMER */}
+        <View style={styles.card}>
+
+          <Text style={styles.section}>
+            TIMER LIVE
+          </Text>
+
+          <TextInput
+            value={minutes}
+            onChangeText={setMinutes}
+            placeholder="minuti"
+            placeholderTextColor="#666"
+            keyboardType="numeric"
+            style={styles.input}
+          />
+
+          {/* START */}
+          <TouchableOpacity
+            onPress={startTimer}
+            style={styles.greenFullBtn}
+          >
+
+            <Text style={styles.darkBtnText}>
+              START
+            </Text>
+
+          </TouchableOpacity>
+
+          {/* STOP */}
+          <TouchableOpacity
+            onPress={stopTimer}
+            style={styles.redFullBtn}
+          >
+
+            <Text style={styles.btnText}>
+              STOP
+            </Text>
+
+          </TouchableOpacity>
+
+          {/* RESET */}
+          <TouchableOpacity
+            onPress={resetTimer}
+            style={styles.orangeFullBtn}
+          >
+
+            <Text style={styles.darkBtnText}>
+              RESET
+            </Text>
+
+          </TouchableOpacity>
+
+        </View>
+
+      </ScrollView>
+
+    </View>
+  );
+}
+
+const styles = {
+
+  container: {
+    flex: 1,
+    backgroundColor: "#000"
+  },
+
+  backBtn: {
+    position: "absolute",
+    top: 50,
+    left: 15,
+    zIndex: 10
+  },
+
+  backText: {
+    color: "#fff",
+    fontSize: 24
+  },
+
+  title: {
+    color: "#ffd700",
+    fontSize: 28,
+    textAlign: "center",
+    marginTop: 60,
+    marginBottom: 10,
+    fontWeight: "bold"
+  },
+
+  card: {
+    backgroundColor: "#111",
+    margin: 15,
+    padding: 15,
+    borderRadius: 15
+  },
+
+  section: {
+    color: "#fff",
+    marginBottom: 10,
+    fontWeight: "bold"
+  },
+
+  input: {
+    backgroundColor: "#000",
+    color: "#fff",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10
+  },
+
+  greenBtn: {
+    flex: 1,
+    backgroundColor: "#00cc66",
+    padding: 12,
+    borderRadius: 10,
+    marginRight: 5
+  },
+
+  redBtn: {
+    flex: 1,
+    backgroundColor: "#ff0033",
+    padding: 12,
+    borderRadius: 10
+  },
+
+  yellowBtn: {
+    backgroundColor: "#ffd700",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  greenFullBtn: {
+    backgroundColor: "#00cc66",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  redFullBtn: {
+    backgroundColor: "#ff0033",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  orangeFullBtn: {
+    backgroundColor: "#ff8800",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  btnText: {
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "bold"
+  },
+
+  darkBtnText: {
+    color: "#000",
+    textAlign: "center",
+    fontWeight: "bold"
+  }
+
+};
