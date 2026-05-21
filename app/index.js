@@ -27,7 +27,7 @@ export default function Login() {
       <View style={styles.glow1} />
       <View style={styles.glow2} />
 
-      <Text style={styles.title}>REALBITY</Text>
+      <Text style={styles.title}>REALBITY SHOW</Text>
       <Text style={styles.subtitle}>ENTRA NEL GIOCO</Text>
 
       <View style={styles.card}>

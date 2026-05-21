@@ -123,7 +123,7 @@ export default function Home() {
       <View style={styles.glow2} />
 
       <Text style={styles.title}>
-        REALBITY
+        REALBITY SHOW
       </Text>
 
       <Text style={styles.subtitle}>
