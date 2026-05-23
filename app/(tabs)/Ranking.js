@@ -67,38 +67,39 @@ export default function Leaderboard() {
     const upper = name?.toUpperCase();
 
     if (blueTeam.includes(upper)) {
-      return "#00bfff";
+      return "#00d4ff";
     }
 
     if (purpleTeam.includes(upper)) {
-      return "#c05cff";
+      return "#c77dff";
     }
 
-    return "#fff";
+    return "#ffffff";
   };
 
-  // SFONDO CARD
+  // GRADIENT CLASSIFICA
   const getCardGradient = (index) => {
 
-    if (index === 0) {
-      return ["#ffd700", "#ffb700"];
-    }
+    if (index === 0) return ["#ffd700", "#ffb300"];
+    if (index === 1) return ["#c0c0c0", "#7a7a7a"];
+    if (index === 2) return ["#cd7f32", "#8a4a12"];
 
-    if (index === 1) {
-      return ["#8a8a8a", "#5f5f5f"];
-    }
+    return ["#1a1a1a", "#0b0b0b"];
+  };
 
-    if (index === 2) {
-      return ["#cd7f32", "#8f4e14"];
-    }
+  const getGlowColor = (index) => {
 
-    return ["#161616", "#0d0d0d"];
+    if (index === 0) return "#ffd700";
+    if (index === 1) return "#c0c0c0";
+    if (index === 2) return "#cd7f32";
+
+    return "#00d4ff";
   };
 
   return (
 
     <LinearGradient
-      colors={["#050505", "#0b0b0b", "#17001f"]}
+      colors={["#050505", "#090909", "#160022"]}
       style={styles.container}
     >
 
@@ -116,7 +117,8 @@ export default function Leaderboard() {
       <ScrollView
         style={{ width: "100%" }}
         contentContainerStyle={{
-          paddingBottom: 30
+          paddingBottom: 40,
+          alignItems: "center"
         }}
         showsVerticalScrollIndicator={false}
       >
@@ -126,12 +128,18 @@ export default function Leaderboard() {
           <LinearGradient
             key={p.id}
             colors={getCardGradient(i)}
-            style={styles.card}
+            style={[
+              styles.card,
+              { borderColor: getGlowColor(i) }
+            ]}
           >
 
             <View style={styles.left}>
 
-              <View style={styles.rankCircle}>
+              <View style={[
+                styles.rankCircle,
+                { borderColor: getGlowColor(i) }
+              ]}>
 
                 <Text style={styles.rank}>
                   #{i + 1}
@@ -184,36 +192,36 @@ const styles = {
 
   container: {
     flex: 1,
-    paddingTop: 65,
+    paddingTop: 70,
     alignItems: "center",
     overflow: "hidden"
   },
 
   glow1: {
     position: "absolute",
-    width: 260,
-    height: 260,
+    width: 300,
+    height: 300,
     borderRadius: 999,
     backgroundColor: "#a020f0",
-    opacity: 0.15,
-    top: -70,
-    right: -90
+    opacity: 0.18,
+    top: -90,
+    right: -100
   },
 
   glow2: {
     position: "absolute",
-    width: 240,
-    height: 240,
+    width: 260,
+    height: 260,
     borderRadius: 999,
-    backgroundColor: "#00bfff",
+    backgroundColor: "#00d4ff",
     opacity: 0.12,
-    bottom: 40,
-    left: -80
+    bottom: 20,
+    left: -90
   },
 
   title: {
     color: "#fff",
-    fontSize: 38,
+    fontSize: 42,
     fontWeight: "900",
     letterSpacing: 2
   },
@@ -222,26 +230,25 @@ const styles = {
     color: "#888",
     fontSize: 12,
     letterSpacing: 4,
-    marginTop: 5,
-    marginBottom: 28
+    marginTop: 6,
+    marginBottom: 30
   },
 
   card: {
-    width: width * 0.9,
-    minHeight: 95,
-    borderRadius: 26,
-    marginBottom: 16,
-    paddingHorizontal: 20,
+    width: width * 0.92,
+    minHeight: 100,
+    borderRadius: 28,
+    marginBottom: 14,
+    paddingHorizontal: 22,
     paddingVertical: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1.5,
     shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10
+    shadowOpacity: 0.5,
+    shadowRadius: 25,
+    elevation: 12
   },
 
   left: {
@@ -250,13 +257,14 @@ const styles = {
   },
 
   rankCircle: {
-    width: 54,
-    height: 54,
+    width: 58,
+    height: 58,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.05)",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 16
+    marginRight: 14,
+    borderWidth: 1
   },
 
   rank: {
@@ -266,7 +274,7 @@ const styles = {
   },
 
   name: {
-    fontSize: 22,
+    fontSize: 23,
     fontWeight: "900",
     letterSpacing: 1
   },
@@ -274,8 +282,8 @@ const styles = {
   playerLabel: {
     color: "#777",
     fontSize: 11,
-    marginTop: 4,
-    letterSpacing: 2
+    letterSpacing: 2,
+    marginTop: 4
   },
 
   pointsBox: {
@@ -284,15 +292,14 @@ const styles = {
 
   points: {
     color: "#fff",
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: "900"
   },
 
   pointsLabel: {
     color: "#999",
     fontSize: 11,
-    letterSpacing: 2,
-    marginTop: -2
+    letterSpacing: 2
   }
 
 };
