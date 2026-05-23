@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import {
+  Dimensions,
+  ScrollView,
+  Text,
+  View
+} from "react-native";
+
+import { LinearGradient } from "expo-linear-gradient";
 
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../firebase";
+
+const { width } = Dimensions.get("window");
 
 export default function Leaderboard() {
 
@@ -62,50 +71,112 @@ export default function Leaderboard() {
     }
 
     if (purpleTeam.includes(upper)) {
-      return "#a020f0";
+      return "#c05cff";
     }
 
     return "#fff";
   };
 
+  // SFONDO CARD
+  const getCardGradient = (index) => {
+
+    if (index === 0) {
+      return ["#ffd700", "#ffb700"];
+    }
+
+    if (index === 1) {
+      return ["#8a8a8a", "#5f5f5f"];
+    }
+
+    if (index === 2) {
+      return ["#cd7f32", "#8f4e14"];
+    }
+
+    return ["#161616", "#0d0d0d"];
+  };
+
   return (
 
-    <View style={styles.container}>
+    <LinearGradient
+      colors={["#050505", "#0b0b0b", "#17001f"]}
+      style={styles.container}
+    >
+
+      <View style={styles.glow1} />
+      <View style={styles.glow2} />
 
       <Text style={styles.title}>
         CLASSIFICA
       </Text>
 
-      <ScrollView style={{ width: "100%" }}>
+      <Text style={styles.subtitle}>
+        REALBITY SHOW
+      </Text>
+
+      <ScrollView
+        style={{ width: "100%" }}
+        contentContainerStyle={{
+          paddingBottom: 30
+        }}
+        showsVerticalScrollIndicator={false}
+      >
 
         {players.map((p, i) => (
 
-          <View key={p.id} style={styles.card}>
+          <LinearGradient
+            key={p.id}
+            colors={getCardGradient(i)}
+            style={styles.card}
+          >
 
-            <Text style={styles.rank}>
-              #{i + 1}
-            </Text>
+            <View style={styles.left}>
 
-            <Text
-              style={[
-                styles.name,
-                { color: getNameColor(p.name) }
-              ]}
-            >
-              {p.name}
-            </Text>
+              <View style={styles.rankCircle}>
 
-            <Text style={styles.points}>
-              {p.points || 0}
-            </Text>
+                <Text style={styles.rank}>
+                  #{i + 1}
+                </Text>
 
-          </View>
+              </View>
+
+              <View>
+
+                <Text
+                  style={[
+                    styles.name,
+                    { color: getNameColor(p.name) }
+                  ]}
+                >
+                  {p.name}
+                </Text>
+
+                <Text style={styles.playerLabel}>
+                  PLAYER
+                </Text>
+
+              </View>
+
+            </View>
+
+            <View style={styles.pointsBox}>
+
+              <Text style={styles.points}>
+                {p.points || 0}
+              </Text>
+
+              <Text style={styles.pointsLabel}>
+                PTS
+              </Text>
+
+            </View>
+
+          </LinearGradient>
 
         ))}
 
       </ScrollView>
 
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -113,44 +184,115 @@ const styles = {
 
   container: {
     flex: 1,
-    backgroundColor: "#000",
-    paddingTop: 60,
-    padding: 15
+    paddingTop: 65,
+    alignItems: "center",
+    overflow: "hidden"
+  },
+
+  glow1: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "#a020f0",
+    opacity: 0.15,
+    top: -70,
+    right: -90
+  },
+
+  glow2: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 999,
+    backgroundColor: "#00bfff",
+    opacity: 0.12,
+    bottom: 40,
+    left: -80
   },
 
   title: {
     color: "#fff",
-    fontSize: 26,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20
+    fontSize: 38,
+    fontWeight: "900",
+    letterSpacing: 2
+  },
+
+  subtitle: {
+    color: "#888",
+    fontSize: 12,
+    letterSpacing: 4,
+    marginTop: 5,
+    marginBottom: 28
   },
 
   card: {
+    width: width * 0.9,
+    minHeight: 95,
+    borderRadius: 26,
+    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 18,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#111",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10
+  },
+
+  left: {
+    flexDirection: "row",
     alignItems: "center"
   },
 
+  rankCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16
+  },
+
   rank: {
-    color: "#ff0033",
+    color: "#fff",
     fontSize: 18,
-    fontWeight: "bold"
+    fontWeight: "900"
   },
 
   name: {
-    fontSize: 16,
-    fontWeight: "bold"
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
+
+  playerLabel: {
+    color: "#777",
+    fontSize: 11,
+    marginTop: 4,
+    letterSpacing: 2
+  },
+
+  pointsBox: {
+    alignItems: "center"
   },
 
   points: {
-    color: "#ff0033",
-    fontSize: 18,
-    fontWeight: "bold"
+    color: "#fff",
+    fontSize: 34,
+    fontWeight: "900"
+  },
+
+  pointsLabel: {
+    color: "#999",
+    fontSize: 11,
+    letterSpacing: 2,
+    marginTop: -2
   }
 
 };
