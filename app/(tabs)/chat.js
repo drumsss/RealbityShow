@@ -11,6 +11,9 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
+  doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -54,6 +57,24 @@ export default function Chat() {
 
     if (!msg.trim()) return;
 
+    // CLEAN CHAT
+    if (msg.trim().toLowerCase() === "/clean") {
+
+      const snap = await getDocs(
+        collection(db, "messages")
+      );
+
+      await Promise.all(
+        snap.docs.map((d) =>
+          deleteDoc(doc(db, "messages", d.id))
+        )
+      );
+
+      setMsg("");
+      return;
+
+    }
+
     await addDoc(collection(db, "messages"), {
       text: msg,
       user,
@@ -92,6 +113,20 @@ export default function Chat() {
     }
 
     return "#ffd700";
+  };
+
+  // ORARIO
+  const formatTime = (timestamp) => {
+
+    if (!timestamp?.toDate) return "";
+
+    const date = timestamp.toDate();
+
+    const h = date.getHours();
+    const m = date.getMinutes();
+
+    return `${h}:${m < 10 ? "0" : ""}${m}`;
+
   };
 
   return (
@@ -157,6 +192,10 @@ export default function Chat() {
 
                 <Text style={styles.text}>
                   {item.text}
+                </Text>
+
+                <Text style={styles.time}>
+                  {formatTime(item.createdAt)}
                 </Text>
 
               </View>
@@ -254,6 +293,13 @@ const styles = {
     color: "#fff",
     fontSize: 16,
     lineHeight: 22
+  },
+
+  time: {
+    color: "#777",
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "right"
   },
 
   inputWrapper: {
