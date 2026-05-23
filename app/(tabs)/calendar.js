@@ -40,46 +40,24 @@ export default function Calendar() {
   useEffect(() => {
 
     const unsub = days.map(day =>
-
       onSnapshot(
         doc(db, "calendar", day),
         (snap) => {
-
           setData(prev => ({
             ...prev,
             [day]: snap.data()?.title || "NESSUNA SFIDA"
           }));
-
         }
       )
-
     );
 
-    return () => {
-      unsub.forEach(u => u());
-    };
-
+    return () => unsub.forEach(u => u());
   }, []);
-
-  const getGradient = (index) => {
-
-    const base = [
-      ["#ffd700", "#ffb300"],
-      ["#00d4ff", "#0066ff"],
-      ["#c77dff", "#6a00ff"],
-      ["#ff4d6d", "#ff0033"],
-      ["#00ff9d", "#00b36b"],
-      ["#c0c0c0", "#6b6b6b"],
-      ["#ff9f1c", "#ff5e00"]
-    ];
-
-    return base[index % base.length];
-  };
 
   return (
 
     <LinearGradient
-      colors={["#050505", "#0b0b0b", "#160022"]}
+      colors={["#050505", "#070707", "#120018"]}
       style={styles.container}
     >
 
@@ -88,22 +66,15 @@ export default function Calendar() {
 
       {/* HEADER */}
       <View style={styles.header}>
-
-        <Text style={styles.title}>
-          WEEKLY CHALLENGES
-        </Text>
-
-        <Text style={styles.subtitle}>
-          CALENDARIO UFFICIALE
-        </Text>
-
+        <Text style={styles.title}>WEEKLY CHALLENGES</Text>
+        <Text style={styles.subtitle}>CALENDARIO UFFICIALE</Text>
       </View>
 
       {/* CARDS */}
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          paddingBottom: 40,
+          paddingBottom: 50,
           alignItems: "center"
         }}
         style={{ width: "100%" }}
@@ -111,11 +82,9 @@ export default function Calendar() {
 
         {days.map((day, i) => (
 
-          <LinearGradient
-            key={day}
-            colors={getGradient(i)}
-            style={styles.card}
-          >
+          <View key={day} style={styles.card}>
+
+            <View style={styles.innerGlow} />
 
             <View style={styles.left}>
 
@@ -137,7 +106,7 @@ export default function Calendar() {
               </Text>
             </View>
 
-          </LinearGradient>
+          </View>
 
         ))}
 
@@ -152,30 +121,29 @@ const styles = {
   container: {
     flex: 1,
     paddingTop: 70,
-    alignItems: "center",
-    overflow: "hidden"
+    alignItems: "center"
   },
 
   glow1: {
     position: "absolute",
-    width: 280,
-    height: 280,
+    width: 320,
+    height: 320,
     borderRadius: 999,
-    backgroundColor: "#c77dff",
-    opacity: 0.15,
-    top: -90,
-    right: -100
+    backgroundColor: "#a020f0",
+    opacity: 0.10,
+    top: -120,
+    right: -120
   },
 
   glow2: {
     position: "absolute",
-    width: 240,
-    height: 240,
+    width: 280,
+    height: 280,
     borderRadius: 999,
     backgroundColor: "#00d4ff",
-    opacity: 0.12,
+    opacity: 0.08,
     bottom: 40,
-    left: -90
+    left: -120
   },
 
   header: {
@@ -185,13 +153,13 @@ const styles = {
 
   title: {
     color: "#fff",
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "900",
     letterSpacing: 2
   },
 
   subtitle: {
-    color: "#888",
+    color: "#777",
     fontSize: 12,
     letterSpacing: 4,
     marginTop: 6
@@ -199,22 +167,37 @@ const styles = {
 
   card: {
     width: width * 0.92,
-    borderRadius: 26,
-    padding: 18,
+    borderRadius: 20,
+    padding: 20,
     marginBottom: 14,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+
+    backgroundColor: "rgba(255,255,255,0.04)",
+
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.12)",
+
     shadowColor: "#000",
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 10
+    shadowOpacity: 0.7,
+    shadowRadius: 25,
+    elevation: 14,
+
+    overflow: "hidden"
+  },
+
+  innerGlow: {
+    position: "absolute",
+    width: "120%",
+    height: "120%",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    transform: [{ rotate: "10deg" }]
   },
 
   left: {
-    flex: 1
+    flex: 1,
+    zIndex: 2
   },
 
   day: {
@@ -225,33 +208,36 @@ const styles = {
   },
 
   line: {
-    height: 2,
-    width: "40%",
-    backgroundColor: "rgba(255,255,255,0.2)",
+    height: 1,
+    width: "30%",
+    backgroundColor: "rgba(255,255,255,0.15)",
     marginTop: 10,
-    marginBottom: 10,
-    borderRadius: 10
+    marginBottom: 10
   },
 
   challenge: {
-    color: "#eaeaea",
+    color: "#e5e5e5",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "500",
     lineHeight: 22
   },
 
   badge: {
-    width: 44,
-    height: 44,
+    width: 50,
+    height: 50,
     borderRadius: 999,
-    backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
+
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)"
   },
 
   badgeText: {
     color: "#fff",
-    fontWeight: "900"
+    fontWeight: "900",
+    fontSize: 14
   }
 
 };
