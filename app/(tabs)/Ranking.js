@@ -22,34 +22,40 @@ export default function Leaderboard() {
       collection(db, "players"),
       (snap) => {
 
-        const data = snap.docs.map(d => {
+        const raw = snap.docs.map(d => {
           const v = d.data();
+
           return {
             id: d.id,
-            name: v.name || d.id,
+            name: (v.name || d.id || "").toLowerCase().trim(),
             points: Number(v.points || 0)
           };
         });
 
-        const filteredData = [];
-        let taddeiFound = false;
+        // 🔥 FIX DUPLICATI: merge per nome
+        const map = new Map();
 
-        data.forEach(player => {
+        raw.forEach(p => {
 
-          if (player.name?.toUpperCase() === "TADDEI") {
-            if (!taddeiFound) {
-              filteredData.push(player);
-              taddeiFound = true;
-            }
+          const key = p.name;
+
+          if (!map.has(key)) {
+            map.set(key, { ...p });
           } else {
-            filteredData.push(player);
-          }
+            const old = map.get(key);
 
+            map.set(key, {
+              ...old,
+              points: old.points + p.points
+            });
+          }
         });
 
-        filteredData.sort((a, b) => (b.points || 0) - (a.points || 0));
+        const cleaned = Array.from(map.values());
 
-        setPlayers(filteredData);
+        cleaned.sort((a, b) => b.points - a.points);
+
+        setPlayers(cleaned);
       }
     );
 
@@ -59,13 +65,13 @@ export default function Leaderboard() {
 
   const getNameColor = (name) => {
 
-    const blueTeam = ["DRUMS", "CHIARA", "TADDEI", "LICARI"];
-    const purpleTeam = ["LUDO", "MIMMO", "ELI", "DRAANE"];
+    const n = (name || "").toLowerCase();
 
-    const upper = name?.toUpperCase();
+    const blueTeam = ["drums", "chiara", "taddei", "licari"];
+    const purpleTeam = ["ludo", "mimmo", "eli", "draane"];
 
-    if (blueTeam.includes(upper)) return "#00d4ff";
-    if (purpleTeam.includes(upper)) return "#c77dff";
+    if (blueTeam.includes(n)) return "#00d4ff";
+    if (purpleTeam.includes(n)) return "#c77dff";
 
     return "#ffffff";
   };
@@ -109,27 +115,56 @@ export default function Leaderboard() {
         {players.map((p, i) => (
 
           <LinearGradient
-            key={p.id}
+            key={p.name}
             colors={getCardGradient(i)}
-            style={[styles.card, { borderColor: getGlowColor(i) }]}
+            style={[
+              styles.card,
+              { borderColor: getGlowColor(i) }
+            ]}
           >
 
             <View style={styles.left}>
-              <View style={[styles.rankCircle, { borderColor: getGlowColor(i) }]}>
-                <Text style={styles.rank}>#{i + 1}</Text>
+
+              <View style={[
+                styles.rankCircle,
+                { borderColor: getGlowColor(i) }
+              ]}>
+
+                <Text style={styles.rank}>
+                  #{i + 1}
+                </Text>
+
               </View>
 
               <View>
-                <Text style={[styles.name, { color: getNameColor(p.name) }]}>
+
+                <Text
+                  style={[
+                    styles.name,
+                    { color: getNameColor(p.name) }
+                  ]}
+                >
                   {p.name}
                 </Text>
-                <Text style={styles.playerLabel}>PLAYER</Text>
+
+                <Text style={styles.playerLabel}>
+                  PLAYER
+                </Text>
+
               </View>
+
             </View>
 
             <View style={styles.pointsBox}>
-              <Text style={styles.points}>{p.points || 0}</Text>
-              <Text style={styles.pointsLabel}>PTS</Text>
+
+              <Text style={styles.points}>
+                {p.points}
+              </Text>
+
+              <Text style={styles.pointsLabel}>
+                PTS
+              </Text>
+
             </View>
 
           </LinearGradient>
@@ -137,6 +172,123 @@ export default function Leaderboard() {
         ))}
 
       </ScrollView>
+
     </LinearGradient>
   );
 }
+
+const styles = {
+
+  container: {
+    flex: 1,
+    paddingTop: 70,
+    alignItems: "center",
+    overflow: "hidden"
+  },
+
+  glow1: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 999,
+    backgroundColor: "#a020f0",
+    opacity: 0.18,
+    top: -90,
+    right: -100
+  },
+
+  glow2: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "#00d4ff",
+    opacity: 0.12,
+    bottom: 20,
+    left: -90
+  },
+
+  title: {
+    color: "#fff",
+    fontSize: 42,
+    fontWeight: "900",
+    letterSpacing: 2
+  },
+
+  subtitle: {
+    color: "#888",
+    fontSize: 12,
+    letterSpacing: 4,
+    marginTop: 6,
+    marginBottom: 30
+  },
+
+  card: {
+    width: width * 0.92,
+    minHeight: 100,
+    borderRadius: 28,
+    marginBottom: 14,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1.5,
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 25,
+    elevation: 12
+  },
+
+  left: {
+    flexDirection: "row",
+    alignItems: "center"
+  },
+
+  rankCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+    borderWidth: 1
+  },
+
+  rank: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+
+  name: {
+    fontSize: 23,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
+
+  playerLabel: {
+    color: "#777",
+    fontSize: 11,
+    letterSpacing: 2,
+    marginTop: 4
+  },
+
+  pointsBox: {
+    alignItems: "center"
+  },
+
+  points: {
+    color: "#fff",
+    fontSize: 36,
+    fontWeight: "900"
+  },
+
+  pointsLabel: {
+    color: "#999",
+    fontSize: 11,
+    letterSpacing: 2
+  }
+
+};

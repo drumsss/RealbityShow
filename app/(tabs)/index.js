@@ -1,22 +1,13 @@
-import { useEffect, useState } from "react";
-import {
-  Animated,
-  Dimensions,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
-
 import { LinearGradient } from "expo-linear-gradient";
-
 import { router } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { Animated, Dimensions, Text, TouchableOpacity, View } from "react-native";
 import { db } from "../../firebase";
 
 const { width } = Dimensions.get("window");
 
 export default function Home() {
-
   const [beauties, setBeauties] = useState(0);
   const [licata, setLicata] = useState(0);
 
@@ -27,129 +18,83 @@ export default function Home() {
   const anim2 = useState(new Animated.Value(1))[0];
 
   const animate = (a) => {
-
     Animated.sequence([
       Animated.timing(a, {
         toValue: 1.08,
         duration: 120,
         useNativeDriver: true
       }),
-
       Animated.timing(a, {
         toValue: 1,
         duration: 120,
         useNativeDriver: true
       })
-
     ]).start();
   };
 
   useEffect(() => {
+    const unsub1 = onSnapshot(doc(db, "teams", "beauties"), (snap) => {
+      setBeauties(snap.data()?.totalPoints || 0);
+      animate(anim1);
+    });
 
-    const unsub1 = onSnapshot(
-      doc(db, "teams", "beauties"),
-      (snap) => {
+    const unsub2 = onSnapshot(doc(db, "teams", "licatadrums"), (snap) => {
+      setLicata(snap.data()?.totalPoints || 0);
+      animate(anim2);
+    });
 
-        setBeauties(snap.data()?.totalPoints || 0);
-        animate(anim1);
+    const unsub3 = onSnapshot(doc(db, "challenge", "current"), (snap) => {
+      const d = snap.data();
+      if (!d) return;
 
-      }
-    );
+      setActive(!!d.active);
 
-    const unsub2 = onSnapshot(
-      doc(db, "teams", "licatadrums"),
-      (snap) => {
+      const updateTimer = () => {
+        const diff = (d.endTime || 0) - Date.now();
+        setTimeLeft(diff > 0 ? diff : 0);
+      };
 
-        setLicata(snap.data()?.totalPoints || 0);
-        animate(anim2);
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
 
-      }
-    );
-
-    const unsub3 = onSnapshot(
-      doc(db, "challenge", "current"),
-      (snap) => {
-
-        const d = snap.data();
-
-        if (!d) return;
-
-        setActive(d.active);
-
-        const updateTimer = () => {
-
-          const diff = d.endTime - Date.now();
-
-          setTimeLeft(diff > 0 ? diff : 0);
-
-        };
-
-        updateTimer();
-
-        const interval = setInterval(updateTimer, 1000);
-
-        return () => clearInterval(interval);
-
-      }
-    );
+      return () => clearInterval(interval);
+    });
 
     return () => {
-
       unsub1();
       unsub2();
       unsub3();
-
     };
-
   }, []);
 
   const format = (ms) => {
-
     const s = Math.floor(ms / 1000);
     const m = Math.floor(s / 60);
     const sec = s % 60;
-
     return `${m}:${sec < 10 ? "0" : ""}${sec}`;
   };
 
   return (
-
     <LinearGradient
       colors={["#050505", "#0f0f0f", "#1a001f"]}
       style={styles.container}
     >
-
       <View style={styles.glow1} />
       <View style={styles.glow2} />
 
-      <Text style={styles.title}>
-        REALBITY SHOW
-      </Text>
-
-      <Text style={styles.subtitle}>
-        LIVE SCOREBOARD
-      </Text>
+      <Text style={styles.title}>REALBITY SHOW</Text>
+      <Text style={styles.subtitle}>LIVE SCOREBOARD</Text>
 
       {/* TIMER */}
-      <LinearGradient
-        colors={["#1a1a1a", "#111"]}
-        style={styles.timerBox}
-      >
-
-        <Text style={styles.timerLabel}>
-          CHALLENGE TIMER
-        </Text>
-
+      <LinearGradient colors={["#1a1a1a", "#111"]} style={styles.timerBox}>
+        <Text style={styles.timerLabel}>CHALLENGE TIMER</Text>
         <Text style={styles.timer}>
           {active ? format(timeLeft) : "STOP"}
         </Text>
-
       </LinearGradient>
 
       {/* CLASSIFICA */}
       <View style={styles.board}>
-
-        {/* BEAUTIES */}
         <Animated.View
           style={[
             styles.teamCard,
@@ -157,24 +102,14 @@ export default function Home() {
             { transform: [{ scale: anim1 }] }
           ]}
         >
-
           <View>
-            <Text style={styles.teamLabel}>
-              TEAM
-            </Text>
-
-            <Text style={styles.beautiesTeam}>
-              BEAUTIES
-            </Text>
+            <Text style={styles.teamLabel}>TEAM</Text>
+            <Text style={styles.beautiesTeam}>BEAUTIES</Text>
           </View>
 
-          <Text style={styles.beautiesPoints}>
-            {beauties}
-          </Text>
-
+          <Text style={styles.beautiesPoints}>{beauties}</Text>
         </Animated.View>
 
-        {/* LICATADRUMS */}
         <Animated.View
           style={[
             styles.teamCard,
@@ -182,23 +117,13 @@ export default function Home() {
             { transform: [{ scale: anim2 }] }
           ]}
         >
-
           <View>
-            <Text style={styles.teamLabel}>
-              TEAM
-            </Text>
-
-            <Text style={styles.licataTeam}>
-              LICATADRUMS
-            </Text>
+            <Text style={styles.teamLabel}>TEAM</Text>
+            <Text style={styles.licataTeam}>LICATADRUMS</Text>
           </View>
 
-          <Text style={styles.licataPoints}>
-            {licata}
-          </Text>
-
+          <Text style={styles.licataPoints}>{licata}</Text>
         </Animated.View>
-
       </View>
 
       {/* ADMIN */}
@@ -207,26 +132,18 @@ export default function Home() {
         style={styles.adminBtn}
         onPress={() => router.push("/admin")}
       >
-
         <LinearGradient
           colors={["#ffd700", "#ffb700"]}
           style={styles.adminGradient}
         >
-
-          <Text style={styles.adminTxt}>
-            ADMIN PANEL
-          </Text>
-
+          <Text style={styles.adminTxt}>ADMIN PANEL</Text>
         </LinearGradient>
-
       </TouchableOpacity>
-
     </LinearGradient>
   );
 }
 
 const styles = {
-
   container: {
     flex: 1,
     alignItems: "center",
@@ -259,15 +176,12 @@ const styles = {
   title: {
     color: "#fff",
     fontSize: 42,
-    fontWeight: "900",
-    letterSpacing: 2
+    fontWeight: "900"
   },
 
   subtitle: {
     color: "#888",
-    marginTop: 5,
-    fontSize: 13,
-    letterSpacing: 3
+    marginTop: 5
   },
 
   timerBox: {
@@ -277,25 +191,17 @@ const styles = {
     width: width * 0.88,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#333",
-    shadowColor: "#ffd700",
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10
+    borderColor: "#333"
   },
 
   timerLabel: {
-    color: "#ffd700",
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 2
+    color: "#ffd700"
   },
 
   timer: {
     color: "#fff",
     fontSize: 54,
-    fontWeight: "900",
-    marginTop: 5
+    fontWeight: "900"
   },
 
   board: {
@@ -314,20 +220,10 @@ const styles = {
     borderWidth: 2
   },
 
-  blueBorder: {
-    borderColor: "#00bfff"
-  },
+  blueBorder: { borderColor: "#00bfff" },
+  purpleBorder: { borderColor: "#a020f0" },
 
-  purpleBorder: {
-    borderColor: "#a020f0"
-  },
-
-  teamLabel: {
-    color: "#666",
-    fontSize: 11,
-    marginBottom: 4,
-    letterSpacing: 2
-  },
+  teamLabel: { color: "#666" },
 
   beautiesTeam: {
     color: "#00bfff",
@@ -366,9 +262,6 @@ const styles = {
   adminTxt: {
     color: "#000",
     textAlign: "center",
-    fontWeight: "900",
-    fontSize: 16,
-    letterSpacing: 1
+    fontWeight: "900"
   }
-
 };

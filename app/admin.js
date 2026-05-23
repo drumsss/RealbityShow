@@ -32,47 +32,63 @@ export default function Admin() {
   const challengeRef = doc(db, "challenge", "current");
 
   useEffect(() => {
+
     const check = async () => {
       const u = await getUser();
+
       if (u !== "drums") {
         router.replace("/(tabs)");
       }
     };
 
     check();
+
   }, []);
+
+  // 🔥 TEAM FIXO
+  const getTeam = (name) => {
+
+    const n = name.toLowerCase().trim();
+
+    const beauties = ["eli", "mimmo", "ludo", "draane"];
+    const licata = ["chiara", "licari", "taddei", "drums"];
+
+    if (beauties.includes(n)) return "beauties";
+    if (licata.includes(n)) return "licatadrums";
+
+    return "licatadrums";
+  };
 
   const playerRef = (name) =>
     doc(db, "players", name.toLowerCase().trim());
 
-  // ➕ AGGIUNGI PUNTI
+  // ➕ ADD POINTS
   const addPoints = async () => {
 
     if (!playerName || !points) return;
 
     const pts = parseInt(points);
-    if (isNaN(pts)) return;
+    const name = playerName.toLowerCase().trim();
 
-    const ref = playerRef(playerName);
-
+    const ref = playerRef(name);
     const snap = await getDoc(ref);
 
-    // crea player se non esiste
+    let team = getTeam(name);
+
     if (!snap.exists()) {
+
       await setDoc(ref, {
-        name: playerName.toLowerCase().trim(),
-        team: "licatadrums",
+        name,
+        team,
         points: 0
       });
     }
-
-    const data = (await getDoc(ref)).data();
 
     await updateDoc(ref, {
       points: increment(pts)
     });
 
-    await updateDoc(doc(db, "teams", data.team), {
+    await updateDoc(doc(db, "teams", team), {
       totalPoints: increment(pts)
     });
 
@@ -80,26 +96,28 @@ export default function Admin() {
     setPoints("");
   };
 
-  // ➖ RIMUOVI PUNTI
+  // ➖ REMOVE POINTS
   const removePoints = async () => {
 
     if (!playerName || !points) return;
 
     const pts = parseInt(points);
-    if (isNaN(pts)) return;
+    const name = playerName.toLowerCase().trim();
 
-    const ref = playerRef(playerName);
-
+    const ref = playerRef(name);
     const snap = await getDoc(ref);
+
     if (!snap.exists()) return;
 
     const data = snap.data();
+
+    const team = data.team || getTeam(name);
 
     await updateDoc(ref, {
       points: increment(-pts)
     });
 
-    await updateDoc(doc(db, "teams", data.team), {
+    await updateDoc(doc(db, "teams", team), {
       totalPoints: increment(-pts)
     });
 
@@ -109,11 +127,15 @@ export default function Admin() {
 
   // 📅 SFIDE
   const updateChallenge = async () => {
+
     if (!day || !challenge) return;
 
-    await setDoc(doc(db, "calendar", day.toLowerCase().trim()), {
-      title: challenge
-    });
+    await setDoc(
+      doc(db, "calendar", day.toLowerCase().trim()),
+      {
+        title: challenge
+      }
+    );
 
     setDay("");
     setChallenge("");
@@ -121,6 +143,7 @@ export default function Admin() {
 
   // ⏱ TIMER
   const startTimer = async () => {
+
     const min = parseInt(minutes);
     if (!min) return;
 
@@ -134,23 +157,31 @@ export default function Admin() {
   };
 
   const stopTimer = async () => {
+
     await updateDoc(challengeRef, {
       active: false
     });
+
   };
 
   const resetTimer = async () => {
+
     await setDoc(challengeRef, {
       active: false,
       endTime: 0,
       duration: 0
     });
+
   };
 
   return (
+
     <View style={styles.container}>
 
-      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+      <TouchableOpacity
+        onPress={() => router.back()}
+        style={styles.backBtn}
+      >
         <Text style={styles.backText}>←</Text>
       </TouchableOpacity>
 
@@ -160,6 +191,7 @@ export default function Admin() {
 
         {/* PUNTI */}
         <View style={styles.card}>
+
           <Text style={styles.section}>PUNTI PLAYER</Text>
 
           <TextInput
@@ -180,18 +212,199 @@ export default function Admin() {
           />
 
           <View style={{ flexDirection: "row" }}>
-            <TouchableOpacity onPress={addPoints} style={styles.greenBtn}>
+
+            <TouchableOpacity
+              onPress={addPoints}
+              style={styles.greenBtn}
+            >
               <Text style={styles.darkBtnText}>+ ADD</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={removePoints} style={styles.redBtn}>
+            <TouchableOpacity
+              onPress={removePoints}
+              style={styles.redBtn}
+            >
               <Text style={styles.btnText}>- REMOVE</Text>
             </TouchableOpacity>
+
           </View>
+
         </View>
 
-        {/* resto invariato */}
+        {/* CALENDARIO */}
+        <View style={styles.card}>
+
+          <Text style={styles.section}>SFIDE SETTIMANA</Text>
+
+          <TextInput
+            value={day}
+            onChangeText={setDay}
+            placeholder="monday"
+            placeholderTextColor="#666"
+            style={styles.input}
+          />
+
+          <TextInput
+            value={challenge}
+            onChangeText={setChallenge}
+            placeholder="sfida"
+            placeholderTextColor="#666"
+            style={styles.input}
+          />
+
+          <TouchableOpacity
+            onPress={updateChallenge}
+            style={styles.yellowBtn}
+          >
+            <Text style={styles.darkBtnText}>SALVA SFIDA</Text>
+          </TouchableOpacity>
+
+        </View>
+
+        {/* TIMER */}
+        <View style={styles.card}>
+
+          <Text style={styles.section}>TIMER LIVE</Text>
+
+          <TextInput
+            value={minutes}
+            onChangeText={setMinutes}
+            placeholder="minuti"
+            placeholderTextColor="#666"
+            keyboardType="numeric"
+            style={styles.input}
+          />
+
+          <TouchableOpacity
+            onPress={startTimer}
+            style={styles.greenFullBtn}
+          >
+            <Text style={styles.darkBtnText}>START</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={stopTimer}
+            style={styles.redFullBtn}
+          >
+            <Text style={styles.btnText}>STOP</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={resetTimer}
+            style={styles.orangeFullBtn}
+          >
+            <Text style={styles.darkBtnText}>RESET</Text>
+          </TouchableOpacity>
+
+        </View>
+
       </ScrollView>
+
     </View>
   );
 }
+
+const styles = {
+
+  container: {
+    flex: 1,
+    backgroundColor: "#000"
+  },
+
+  backBtn: {
+    position: "absolute",
+    top: 50,
+    left: 15,
+    zIndex: 10
+  },
+
+  backText: {
+    color: "#fff",
+    fontSize: 24
+  },
+
+  title: {
+    color: "#ffd700",
+    fontSize: 28,
+    textAlign: "center",
+    marginTop: 60,
+    marginBottom: 10,
+    fontWeight: "bold"
+  },
+
+  card: {
+    backgroundColor: "#111",
+    margin: 15,
+    padding: 15,
+    borderRadius: 15
+  },
+
+  section: {
+    color: "#fff",
+    marginBottom: 10,
+    fontWeight: "bold"
+  },
+
+  input: {
+    backgroundColor: "#000",
+    color: "#fff",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10
+  },
+
+  greenBtn: {
+    flex: 1,
+    backgroundColor: "#00cc66",
+    padding: 12,
+    borderRadius: 10,
+    marginRight: 5
+  },
+
+  redBtn: {
+    flex: 1,
+    backgroundColor: "#ff0033",
+    padding: 12,
+    borderRadius: 10
+  },
+
+  yellowBtn: {
+    backgroundColor: "#ffd700",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  greenFullBtn: {
+    backgroundColor: "#00cc66",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  redFullBtn: {
+    backgroundColor: "#ff0033",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  orangeFullBtn: {
+    backgroundColor: "#ff8800",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10
+  },
+
+  btnText: {
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "bold"
+  },
+
+  darkBtnText: {
+    color: "#000",
+    textAlign: "center",
+    fontWeight: "bold"
+  }
+};
