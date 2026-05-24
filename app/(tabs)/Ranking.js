@@ -76,10 +76,8 @@ export default function Leaderboard() {
     return "#ffffff";
   };
 
-  const getCardGradient = (index) => {
-    if (index === 0) return ["#ffd700", "#ffb300"];
-    if (index === 1) return ["#c0c0c0", "#7a7a7a"];
-    if (index === 2) return ["#cd7f32", "#8a4a12"];
+  // 🔥 SFONDO UGUALE PER TUTTI
+  const getCardGradient = () => {
     return ["#1a1a1a", "#0b0b0b"];
   };
 
