@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  Animated,
   FlatList,
   Text,
   TextInput,
@@ -22,6 +21,7 @@ import {
 } from "firebase/firestore";
 
 import { Audio } from "expo-av";
+import * as FileSystem from "expo-file-system";
 
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
@@ -38,42 +38,6 @@ export default function Chat() {
   const [playingId, setPlayingId] = useState(null);
 
   const soundRef = useRef(null);
-
-  // 🌊 ONDE
-  const waves = useRef(
-    [...Array(5)].map(() => new Animated.Value(10))
-  ).current;
-
-  const startWaveAnimation = () => {
-
-    waves.forEach((w, i) => {
-
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(w, {
-            toValue: 30,
-            duration: 300 + i * 80,
-            useNativeDriver: false
-          }),
-          Animated.timing(w, {
-            toValue: 10,
-            duration: 300 + i * 80,
-            useNativeDriver: false
-          })
-        ])
-      ).start();
-
-    });
-
-  };
-
-  const stopWaveAnimation = () => {
-
-    waves.forEach(w => {
-      w.stopAnimation(() => w.setValue(10));
-    });
-
-  };
 
   useEffect(() => {
 
@@ -140,23 +104,22 @@ export default function Chat() {
         playsInSilentModeIOS: true
       });
 
-      const recording = new Audio.Recording();
+      const rec = new Audio.Recording();
 
-      await recording.prepareToRecordAsync(
+      await rec.prepareToRecordAsync(
         Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
       );
 
-      await recording.startAsync();
+      await rec.startAsync();
 
-      setRecording(recording);
-      startWaveAnimation();
+      setRecording(rec);
 
     } catch (e) {
       console.log(e);
     }
   };
 
-  // 🛑 STOP + UPLOAD
+  // 🛑 STOP + UPLOAD FIXATO
   const stopRecording = async () => {
 
     try {
@@ -172,17 +135,17 @@ export default function Chat() {
         Math.floor(status.durationMillis / 1000) || 0;
 
       setRecording(null);
-      stopWaveAnimation();
 
-      // 🔥 CONVERT TO BLOB
-      const blob = await fetch(uri).then(r => r.blob());
+      // 🔥 LEGGE FILE IN BASE64 (NO BUG EXPO)
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64
+      });
 
-      const fileRef = ref(
-        storage,
-        `audio/${Date.now()}.m4a`
-      );
+      const fileRef = ref(storage, `audio/${Date.now()}.m4a`);
 
-      await uploadBytes(fileRef, blob);
+      await uploadBytes(fileRef, base64, {
+        contentType: "audio/m4a"
+      });
 
       const downloadURL = await getDownloadURL(fileRef);
 
@@ -195,7 +158,7 @@ export default function Chat() {
       });
 
     } catch (e) {
-      console.log(e);
+      console.log("UPLOAD ERROR", e);
     }
   };
 
@@ -252,10 +215,8 @@ export default function Chat() {
   };
 
   const formatDuration = (s) => {
-
     const m = Math.floor(s / 60);
     const sec = s % 60;
-
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
@@ -307,22 +268,13 @@ export default function Chat() {
                 {item.type === "audio" ? (
 
                   <TouchableOpacity
-                    style={styles.audioBox}
                     onPress={() => playAudio(item.audio, item.id)}
+                    style={styles.audioBox}
                   >
 
                     <Text style={styles.play}>
                       {playingId === item.id ? "❚❚" : "▶"}
                     </Text>
-
-                    <View style={styles.waveRow}>
-                      {waves.map((w, i) => (
-                        <Animated.View
-                          key={i}
-                          style={[styles.wave, { height: w }]}
-                        />
-                      ))}
-                    </View>
 
                     <Text style={styles.duration}>
                       {formatDuration(item.duration || 0)}
@@ -398,15 +350,15 @@ const styles = {
 
   time: { color: "#777", fontSize: 10, marginTop: 5, textAlign: "right" },
 
-  audioBox: { flexDirection: "row", alignItems: "center" },
+  audioBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
 
-  play: { color: "#fff", marginRight: 10 },
+  play: { color: "#fff" },
 
-  waveRow: { flexDirection: "row", flex: 1 },
-
-  wave: { width: 4, backgroundColor: "#888", marginHorizontal: 2, borderRadius: 5 },
-
-  duration: { color: "#ccc", marginLeft: 10, fontSize: 12 },
+  duration: { color: "#ccc", fontSize: 12 },
 
   inputRow: { flexDirection: "row", padding: 10 },
 
