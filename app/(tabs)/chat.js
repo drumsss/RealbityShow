@@ -23,7 +23,9 @@ import {
 
 import { Audio } from "expo-av";
 
-import { db } from "../../firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+
+import { db, storage } from "../../firebase";
 import { getUser } from "../session";
 
 export default function Chat() {
@@ -37,7 +39,7 @@ export default function Chat() {
 
   const soundRef = useRef(null);
 
-  // 🌊 ONDE (FIX STABILE)
+  // 🌊 ONDE
   const waves = useRef(
     [...Array(5)].map(() => new Animated.Value(10))
   ).current;
@@ -50,12 +52,12 @@ export default function Chat() {
         Animated.sequence([
           Animated.timing(w, {
             toValue: 30,
-            duration: 300 + i * 70,
+            duration: 300 + i * 80,
             useNativeDriver: false
           }),
           Animated.timing(w, {
             toValue: 10,
-            duration: 300 + i * 70,
+            duration: 300 + i * 80,
             useNativeDriver: false
           })
         ])
@@ -68,9 +70,7 @@ export default function Chat() {
   const stopWaveAnimation = () => {
 
     waves.forEach(w => {
-      w.stopAnimation(() => {
-        w.setValue(10);
-      });
+      w.stopAnimation(() => w.setValue(10));
     });
 
   };
@@ -108,14 +108,13 @@ export default function Chat() {
       const snap = await getDocs(collection(db, "messages"));
 
       await Promise.all(
-        snap.docs.map((d) =>
+        snap.docs.map(d =>
           deleteDoc(doc(db, "messages", d.id))
         )
       );
 
       setMsg("");
       return;
-
     }
 
     await addDoc(collection(db, "messages"), {
@@ -126,10 +125,9 @@ export default function Chat() {
     });
 
     setMsg("");
-
   };
 
-  // 🎤 START RECORDING (FIX)
+  // 🎤 START RECORDING
   const startRecording = async () => {
 
     try {
@@ -151,16 +149,14 @@ export default function Chat() {
       await recording.startAsync();
 
       setRecording(recording);
-
       startWaveAnimation();
 
     } catch (e) {
-      console.log("REC ERROR", e);
+      console.log(e);
     }
-
   };
 
-  // 🛑 STOP RECORDING (FIX)
+  // 🛑 STOP + UPLOAD
   const stopRecording = async () => {
 
     try {
@@ -176,11 +172,22 @@ export default function Chat() {
         Math.floor(status.durationMillis / 1000) || 0;
 
       setRecording(null);
-
       stopWaveAnimation();
 
+      // 🔥 CONVERT TO BLOB
+      const blob = await fetch(uri).then(r => r.blob());
+
+      const fileRef = ref(
+        storage,
+        `audio/${Date.now()}.m4a`
+      );
+
+      await uploadBytes(fileRef, blob);
+
+      const downloadURL = await getDownloadURL(fileRef);
+
       await addDoc(collection(db, "messages"), {
-        audio: uri,
+        audio: downloadURL,
         duration,
         type: "audio",
         user,
@@ -188,12 +195,11 @@ export default function Chat() {
       });
 
     } catch (e) {
-      console.log("STOP ERROR", e);
+      console.log(e);
     }
-
   };
 
-  // ▶ PLAY AUDIO (FIX STABILE)
+  // ▶ PLAY AUDIO
   const playAudio = async (uri, id) => {
 
     try {
@@ -210,12 +216,10 @@ export default function Chat() {
 
         soundRef.current = null;
         setPlayingId(null);
-
         return;
       }
 
       if (soundRef.current) {
-        await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
       }
 
@@ -225,7 +229,7 @@ export default function Chat() {
       soundRef.current = sound;
       setPlayingId(id);
 
-      sound.setOnPlaybackStatusUpdate((status) => {
+      sound.setOnPlaybackStatusUpdate(status => {
         if (status.didJustFinish) {
           setPlayingId(null);
         }
@@ -234,9 +238,8 @@ export default function Chat() {
       await sound.playAsync();
 
     } catch (e) {
-      console.log("PLAY ERROR", e);
+      console.log(e);
     }
-
   };
 
   const formatTime = (t) => {
@@ -244,12 +247,15 @@ export default function Chat() {
     if (!t?.toDate) return "";
 
     const d = t.toDate();
+
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
   const formatDuration = (s) => {
+
     const m = Math.floor(s / 60);
     const sec = s % 60;
+
     return `${m}:${sec.toString().padStart(2, "0")}`;
   };
 
@@ -276,7 +282,7 @@ export default function Chat() {
 
       <FlatList
         data={messages}
-        keyExtractor={(i) => i.id}
+        keyExtractor={i => i.id}
         contentContainerStyle={{ padding: 10 }}
         renderItem={({ item }) => {
 
@@ -301,8 +307,8 @@ export default function Chat() {
                 {item.type === "audio" ? (
 
                   <TouchableOpacity
-                    onPress={() => playAudio(item.audio, item.id)}
                     style={styles.audioBox}
+                    onPress={() => playAudio(item.audio, item.id)}
                   >
 
                     <Text style={styles.play}>
@@ -354,16 +360,14 @@ export default function Chat() {
         />
 
         <TouchableOpacity onPress={send} style={styles.send}>
-          <Text style={{ color: "#000" }}>➤</Text>
+          <Text>➤</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={recording ? stopRecording : startRecording}
           style={[styles.mic, { backgroundColor: recording ? "#ff2b2b" : "#ffd700" }]}
         >
-          <Text>
-            {recording ? "■" : "🎤"}
-          </Text>
+          <Text>{recording ? "■" : "🎤"}</Text>
         </TouchableOpacity>
 
       </View>
