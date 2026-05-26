@@ -20,6 +20,8 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 
+import { Audio } from "expo-av";
+
 import { db } from "../../firebase";
 import { getUser } from "../session";
 
@@ -28,6 +30,8 @@ export default function Chat() {
   const [msg, setMsg] = useState("");
   const [user, setUser] = useState("");
   const [messages, setMessages] = useState([]);
+
+  const [recording, setRecording] = useState(null);
 
   useEffect(() => {
 
@@ -78,10 +82,86 @@ export default function Chat() {
     await addDoc(collection(db, "messages"), {
       text: msg,
       user,
+      type: "text",
       createdAt: serverTimestamp()
     });
 
     setMsg("");
+
+  };
+
+  // START AUDIO
+  const startRecording = async () => {
+
+    try {
+
+      await Audio.requestPermissionsAsync();
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true
+      });
+
+      const { recording } =
+        await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+
+      setRecording(recording);
+
+    } catch (err) {
+
+      console.log(err);
+
+    }
+
+  };
+
+  // STOP AUDIO
+  const stopRecording = async () => {
+
+    try {
+
+      if (!recording) return;
+
+      await recording.stopAndUnloadAsync();
+
+      const uri = recording.getURI();
+
+      setRecording(null);
+
+      await addDoc(collection(db, "messages"), {
+        audio: uri,
+        user,
+        type: "audio",
+        createdAt: serverTimestamp()
+      });
+
+    } catch (err) {
+
+      console.log(err);
+
+    }
+
+  };
+
+  // PLAYER AUDIO
+  const playAudio = async (uri) => {
+
+    try {
+
+      const { sound } =
+        await Audio.Sound.createAsync({
+          uri
+        });
+
+      await sound.playAsync();
+
+    } catch (err) {
+
+      console.log(err);
+
+    }
 
   };
 
@@ -190,9 +270,28 @@ export default function Chat() {
                   {item.user}
                 </Text>
 
-                <Text style={styles.text}>
-                  {item.text}
-                </Text>
+                {item.type === "audio" ? (
+
+                  <TouchableOpacity
+                    style={styles.audioBtn}
+                    onPress={() =>
+                      playAudio(item.audio)
+                    }
+                  >
+
+                    <Text style={styles.audioText}>
+                      ▶ RIPRODUCI AUDIO
+                    </Text>
+
+                  </TouchableOpacity>
+
+                ) : (
+
+                  <Text style={styles.text}>
+                    {item.text}
+                  </Text>
+
+                )}
 
                 <Text style={styles.time}>
                   {formatTime(item.createdAt)}
@@ -225,6 +324,29 @@ export default function Chat() {
 
           <Text style={styles.sendIcon}>
             ➤
+          </Text>
+
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={
+            recording
+              ? stopRecording
+              : startRecording
+          }
+          style={[
+            styles.micBtn,
+            {
+              backgroundColor:
+                recording
+                  ? "#ff2b2b"
+                  : "#1f1f1f"
+            }
+          ]}
+        >
+
+          <Text style={styles.micIcon}>
+            🎤
           </Text>
 
         </TouchableOpacity>
@@ -302,6 +424,20 @@ const styles = {
     textAlign: "right"
   },
 
+  audioBtn: {
+    backgroundColor: "#222",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    marginTop: 4
+  },
+
+  audioText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 14
+  },
+
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
@@ -339,6 +475,19 @@ const styles = {
     fontSize: 22,
     fontWeight: "bold",
     marginLeft: 2
+  },
+
+  micBtn: {
+    width: 55,
+    height: 55,
+    borderRadius: 100,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 10
+  },
+
+  micIcon: {
+    fontSize: 22
   }
 
 };
