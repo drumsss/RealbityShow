@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   FlatList,
@@ -32,6 +32,11 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
 
   const [recording, setRecording] = useState(null);
+
+  const [playingId, setPlayingId] =
+    useState(null);
+
+  const soundRef = useRef(null);
 
   useEffect(() => {
 
@@ -126,12 +131,21 @@ export default function Chat() {
 
       await recording.stopAndUnloadAsync();
 
+      const status =
+        await recording.getStatusAsync();
+
       const uri = recording.getURI();
+
+      const duration =
+        Math.floor(
+          status.durationMillis / 1000
+        ) || 0;
 
       setRecording(null);
 
       await addDoc(collection(db, "messages"), {
         audio: uri,
+        duration,
         user,
         type: "audio",
         createdAt: serverTimestamp()
@@ -146,14 +160,59 @@ export default function Chat() {
   };
 
   // PLAYER AUDIO
-  const playAudio = async (uri) => {
+  const playAudio = async (
+    uri,
+    id
+  ) => {
 
     try {
+
+      // STOP AUDIO SE GIÀ APERTO
+      if (
+        soundRef.current &&
+        playingId === id
+      ) {
+
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+
+        soundRef.current = null;
+        setPlayingId(null);
+
+        return;
+
+      }
+
+      // STOP ALTRO AUDIO
+      if (soundRef.current) {
+
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+
+      }
 
       const { sound } =
         await Audio.Sound.createAsync({
           uri
         });
+
+      soundRef.current = sound;
+
+      setPlayingId(id);
+
+      sound.setOnPlaybackStatusUpdate(
+        (status) => {
+
+          if (
+            status.didJustFinish
+          ) {
+
+            setPlayingId(null);
+
+          }
+
+        }
+      );
 
       await sound.playAsync();
 
@@ -206,6 +265,17 @@ export default function Chat() {
     const m = date.getMinutes();
 
     return `${h}:${m < 10 ? "0" : ""}${m}`;
+
+  };
+
+  // DURATA AUDIO
+  const formatDuration = (sec) => {
+
+    const m = Math.floor(sec / 60);
+
+    const s = sec % 60;
+
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
 
   };
 
@@ -273,14 +343,112 @@ export default function Chat() {
                 {item.type === "audio" ? (
 
                   <TouchableOpacity
-                    style={styles.audioBtn}
+                    style={styles.audioContainer}
                     onPress={() =>
-                      playAudio(item.audio)
+                      playAudio(
+                        item.audio,
+                        item.id
+                      )
                     }
                   >
 
-                    <Text style={styles.audioText}>
-                      ▶ RIPRODUCI AUDIO
+                    {/* PLAY */}
+                    <View
+                      style={styles.playBtn}
+                    >
+
+                      <Text
+                        style={
+                          styles.playIcon
+                        }
+                      >
+                        {playingId ===
+                        item.id
+                          ? "❚❚"
+                          : "▶"}
+                      </Text>
+
+                    </View>
+
+                    {/* ONDE */}
+                    <View
+                      style={styles.waveContainer}
+                    >
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 10
+                          }
+                        ]}
+                      />
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 18
+                          }
+                        ]}
+                      />
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 26
+                          }
+                        ]}
+                      />
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 14
+                          }
+                        ]}
+                      />
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 20
+                          }
+                        ]}
+                      />
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 30
+                          }
+                        ]}
+                      />
+
+                      <View
+                        style={[
+                          styles.wave,
+                          {
+                            height: 16
+                          }
+                        ]}
+                      />
+
+                    </View>
+
+                    {/* DURATA */}
+                    <Text
+                      style={
+                        styles.audioDuration
+                      }
+                    >
+                      {formatDuration(
+                        item.duration || 0
+                      )}
                     </Text>
 
                   </TouchableOpacity>
@@ -340,13 +508,15 @@ export default function Chat() {
               backgroundColor:
                 recording
                   ? "#ff2b2b"
-                  : "#1f1f1f"
+                  : "#ffd700"
             }
           ]}
         >
 
           <Text style={styles.micIcon}>
-            🎤
+            {recording
+              ? "■"
+              : "🎤"}
           </Text>
 
         </TouchableOpacity>
@@ -424,18 +594,51 @@ const styles = {
     textAlign: "right"
   },
 
-  audioBtn: {
-    backgroundColor: "#222",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+  // AUDIO
+  audioContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1a1a1a",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     marginTop: 4
   },
 
-  audioText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 14
+  playBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 100,
+    backgroundColor: "#ffd700",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12
+  },
+
+  playIcon: {
+    color: "#000",
+    fontSize: 16,
+    fontWeight: "bold"
+  },
+
+  waveContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1
+  },
+
+  wave: {
+    width: 4,
+    borderRadius: 10,
+    backgroundColor: "#888",
+    marginHorizontal: 2
+  },
+
+  audioDuration: {
+    color: "#ccc",
+    fontSize: 12,
+    marginLeft: 10,
+    fontWeight: "bold"
   },
 
   inputWrapper: {
@@ -483,11 +686,17 @@ const styles = {
     borderRadius: 100,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 10
+    marginLeft: 10,
+    shadowColor: "#ffd700",
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 5
   },
 
   micIcon: {
-    fontSize: 22
+    fontSize: 22,
+    color: "#000",
+    fontWeight: "bold"
   }
 
 };
