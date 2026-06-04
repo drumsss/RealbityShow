@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
-  PanResponder,
+  Pressable,
   Text,
   TextInput,
   TouchableOpacity,
@@ -87,7 +87,6 @@ export default function Chat() {
 
     });
 
-    // 🎬 INTRO TV ANIMATION
     Animated.sequence([
 
       Animated.parallel([
@@ -117,7 +116,6 @@ export default function Chat() {
 
     ]).start(() => {
 
-      // 🔥 GLOW LOOP
       Animated.loop(
         Animated.sequence([
           Animated.timing(logoGlow, {
@@ -135,7 +133,6 @@ export default function Chat() {
 
     });
 
-    // 📺 GLITCH LOOP
     const interval = setInterval(() => {
 
       if (Math.random() > 0.65) {
@@ -210,6 +207,7 @@ export default function Chat() {
       );
 
       setMsg("");
+      setReplyTo(null);
       return;
     }
 
@@ -255,32 +253,11 @@ export default function Chat() {
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  const createPan = (item) => {
+  // 👆 CLICK TO REPLY (NUOVO)
+  const onPressMessage = (item) => {
+    setReplyTo(item);
 
-    const panResponder = PanResponder.create({
-
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > 10,
-
-      onPanResponderMove: (_, g) => {
-        trans[item.id].setValue(g.dx);
-      },
-
-      onPanResponderRelease: (_, g) => {
-
-        if (g.dx > 70) setReplyTo(item);
-
-        if (g.dx < -80) deleteMessage(item.id, item.user);
-
-        Animated.spring(trans[item.id], {
-          toValue: 0,
-          useNativeDriver: true
-        }).start();
-      }
-
-    });
-
-    return panResponder;
+    Haptics.selectionAsync();
   };
 
   const renderItem = ({ item }) => {
@@ -290,8 +267,6 @@ export default function Chat() {
     const opacity = anim[item.id] || new Animated.Value(1);
     const translateX = trans[item.id] || new Animated.Value(0);
 
-    const pan = createPan(item);
-
     return (
 
       <View style={[
@@ -300,7 +275,6 @@ export default function Chat() {
       ]}>
 
         <Animated.View
-          {...pan.panHandlers}
           style={[
             styles.bubble,
             isMine ? styles.me : styles.other,
@@ -311,17 +285,24 @@ export default function Chat() {
           ]}
         >
 
-          <Text style={styles.user}>{item.user}</Text>
+          {/* 👆 TAP PER RISPONDERE */}
+          <Pressable onPress={() => onPressMessage(item)}>
 
-          {item.replyTo && (
-            <Text style={styles.replyText}>
-              ↩ {item.replyTo.text}
+            <Text style={styles.user}>{item.user}</Text>
+
+            {item.replyTo && (
+              <Text style={styles.replyText}>
+                ↩ {item.replyTo.text}
+              </Text>
+            )}
+
+            <Text style={styles.text}>{item.text}</Text>
+
+            <Text style={styles.time}>
+              {formatTime(item.createdAt)}
             </Text>
-          )}
 
-          <Text style={styles.text}>{item.text}</Text>
-
-          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+          </Pressable>
 
         </Animated.View>
 
@@ -334,7 +315,7 @@ export default function Chat() {
 
     <View style={styles.container}>
 
-      {/* 📺 HEADER TV STYLE */}
+      {/* HEADER */}
       <View style={styles.header}>
 
         <Animated.View
@@ -359,9 +340,7 @@ export default function Chat() {
             source={require("../../assets/logo_bw.png")}
             style={[
               styles.logo,
-              {
-                opacity: glitchOpacity
-              }
+              { opacity: glitchOpacity }
             ]}
             resizeMode="contain"
           />
