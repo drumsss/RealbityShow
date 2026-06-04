@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  Alert,
   Animated,
+  Clipboard,
   FlatList,
-  PanResponder,
   Text,
   TextInput,
   TouchableOpacity,
@@ -35,9 +36,7 @@ export default function Chat() {
   const [replyTo, setReplyTo] = useState(null);
 
   const flatRef = useRef();
-
   const anim = useRef({}).current;
-  const trans = useRef({}).current;
 
   useEffect(() => {
 
@@ -57,14 +56,13 @@ export default function Chat() {
 
       data.forEach(m => {
         if (!anim[m.id]) anim[m.id] = new Animated.Value(1);
-        if (!trans[m.id]) trans[m.id] = new Animated.Value(0);
       });
 
       setMessages(data);
 
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
-      }, 120);
+      }, 100);
 
     });
 
@@ -101,28 +99,59 @@ export default function Chat() {
     setReplyTo(null);
   };
 
-  const deleteMessage = (id, owner) => {
+  const deleteMessage = async (item) => {
 
-    if (owner !== user) return;
+    if (item.user !== user) return;
 
     Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Success
     );
 
-    Animated.parallel([
-      Animated.timing(anim[id], {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true
-      }),
-      Animated.timing(trans[id], {
-        toValue: -60,
-        duration: 150,
-        useNativeDriver: true
-      })
-    ]).start(() => {
-      deleteDoc(doc(db, "messages", id));
+    Animated.timing(anim[item.id], {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true
+    }).start(async () => {
+      await deleteDoc(doc(db, "messages", item.id));
     });
+  };
+
+  const copyText = async (text) => {
+    await Clipboard.setStringAsync(text);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const openMenu = (item) => {
+
+    const isMine = item.user === user;
+
+    Alert.alert(
+      "Messaggio",
+      "",
+      [
+        {
+          text: "Rispondi",
+          onPress: () => setReplyTo(item)
+        },
+
+        {
+          text: "Copia testo",
+          onPress: () => copyText(item.text)
+        },
+
+        isMine && {
+          text: "Elimina",
+          style: "destructive",
+          onPress: () => deleteMessage(item)
+        },
+
+        {
+          text: "Annulla",
+          style: "cancel"
+        }
+
+      ].filter(Boolean)
+    );
   };
 
   const formatTime = (t) => {
@@ -137,36 +166,12 @@ export default function Chat() {
   const getAvatarColor = (name) => {
     const colors = ["#4dd0ff", "#ff4d6d", "#ffd166", "#06d6a0", "#a78bfa"];
     let hash = 0;
+
     for (let i = 0; i < (name || "").length; i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
+
     return colors[Math.abs(hash) % colors.length];
-  };
-
-  const createPan = (item) => {
-
-    const panResponder = PanResponder.create({
-
-      onMoveShouldSetPanResponder: (_, g) =>
-        Math.abs(g.dx) > 10,
-
-      onPanResponderMove: (_, g) => {
-        trans[item.id].setValue(g.dx);
-      },
-
-      onPanResponderRelease: (_, g) => {
-
-        if (g.dx < -80) deleteMessage(item.id, item.user);
-
-        Animated.spring(trans[item.id], {
-          toValue: 0,
-          useNativeDriver: true
-        }).start();
-      }
-
-    });
-
-    return panResponder;
   };
 
   const renderItem = ({ item }) => {
@@ -174,9 +179,6 @@ export default function Chat() {
     const isMine = item.user === user;
 
     const opacity = anim[item.id] || new Animated.Value(1);
-    const translateX = trans[item.id] || new Animated.Value(0);
-
-    const pan = createPan(item);
 
     return (
 
@@ -185,7 +187,6 @@ export default function Chat() {
         isMine ? styles.right : styles.left
       ]}>
 
-        {/* AVATAR */}
         <View style={[
           styles.avatar,
           { backgroundColor: getAvatarColor(item.user) }
@@ -195,34 +196,38 @@ export default function Chat() {
           </Text>
         </View>
 
-        <Animated.View
-          {...pan.panHandlers}
-          style={[
-            styles.bubble,
-            isMine ? styles.me : styles.other,
-            {
-              opacity,
-              transform: [{ translateX }]
-            }
-          ]}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onLongPress={() => openMenu(item)}
         >
 
-          <Text style={styles.user}>{item.user}</Text>
+          <Animated.View
+            style={[
+              styles.bubble,
+              isMine ? styles.me : styles.other,
+              { opacity }
+            ]}
+          >
 
-          {item.replyTo && (
-            <Text style={styles.replyText}>
-              ↩ {item.replyTo.text}
+            <Text style={styles.user}>{item.user}</Text>
+
+            {item.replyTo && (
+              <Text style={styles.replyText}>
+                ↩ {item.replyTo.text}
+              </Text>
+            )}
+
+            <Text style={styles.text}>{item.text}</Text>
+
+            <Text style={styles.time}>
+              {formatTime(item.createdAt)}
             </Text>
-          )}
 
-          <Text style={styles.text}>{item.text}</Text>
+          </Animated.View>
 
-          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
-
-        </Animated.View>
+        </TouchableOpacity>
 
       </View>
-
     );
   };
 
@@ -291,7 +296,7 @@ const styles = {
 
   row: {
     flexDirection: "row",
-    marginVertical: 4,
+    marginVertical: 5,
     alignItems: "flex-end"
   },
 
