@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
-  PanResponder,
   Text,
   TextInput,
   TouchableOpacity,
@@ -13,12 +12,13 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc
 } from "firebase/firestore";
 
@@ -31,11 +31,10 @@ export default function Chat() {
   const [user, setUser] = useState("");
   const [messages, setMessages] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
-  const [typingUsers, setTypingUsers] = useState([]);
+  const [selected, setSelected] = useState(null);
 
   const flatRef = useRef();
-
-  const animValues = useRef({}).current;
+  const anim = useRef({}).current;
 
   useEffect(() => {
 
@@ -54,13 +53,13 @@ export default function Chat() {
       }));
 
       data.forEach(m => {
-        if (!animValues[m.id]) {
-          animValues[m.id] = new Animated.Value(0);
+        if (!anim[m.id]) {
+          anim[m.id] = new Animated.Value(0);
 
-          Animated.spring(animValues[m.id], {
+          Animated.spring(anim[m.id], {
             toValue: 1,
-            friction: 7,
-            useNativeDriver: true
+            useNativeDriver: true,
+            friction: 7
           }).start();
         }
       });
@@ -70,94 +69,64 @@ export default function Chat() {
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
       }, 100);
+
     });
 
-    // typing realtime
-    const typingRef = collection(db, "typing");
+    return unsub;
 
-    const unsubTyping = onSnapshot(typingRef, (snap) => {
-      const usersTyping = snap.docs.map(d => d.data().user)
-        .filter(u => u !== user);
+  }, []);
 
-      setTypingUsers(usersTyping);
-    });
-
-    return () => {
-      unsub();
-      unsubTyping();
-    };
-
-  }, [user]);
-
-  // 📩 SEND
+  // 🧹 CLEAN CHAT
   const send = async () => {
 
     if (!msg.trim()) return;
 
+    if (msg.trim().toLowerCase() === "/clean") {
+
+      const snap = await getDocs(collection(db, "messages"));
+
+      await Promise.all(
+        snap.docs.map(d =>
+          deleteDoc(doc(db, "messages", d.id))
+        )
+      );
+
+      setMsg("");
+      return;
+    }
+
     await addDoc(collection(db, "messages"), {
       text: msg,
       user,
-      replyTo: replyTo || null,
-      status: "sent",
       createdAt: serverTimestamp(),
+      replyTo: replyTo || null,
       reactions: []
     });
 
     setMsg("");
     setReplyTo(null);
-
-    // typing stop
-    await setDoc(doc(db, "typing", user), {
-      user,
-      typing: false
-    });
   };
 
-  // ✍️ typing update
-  const handleTyping = async (text) => {
+  // 🗑 DELETE MESSAGE
+  const deleteMessage = async (id, owner) => {
 
-    setMsg(text);
+    if (owner !== user) return;
 
-    await setDoc(doc(db, "typing", user), {
-      user,
-      typing: text.length > 0
-    });
+    await deleteDoc(doc(db, "messages", id));
   };
 
-  // 😂 reaction
-  const addReaction = async (id, emoji) => {
+  // 😂 REACTION
+  const react = async (id, emoji) => {
 
     const refMsg = doc(db, "messages", id);
 
-    const snap = messages.find(m => m.id === id);
+    const m = messages.find(x => x.id === id);
 
     await updateDoc(refMsg, {
-      reactions: [...(snap.reactions || []), emoji]
+      reactions: [...(m.reactions || []), emoji]
     });
-  };
 
-  // 📩 swipe gesture (reply)
-  const createPanResponder = (item) => {
-
-    let dx = 0;
-
-    return PanResponder.create({
-
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20,
-
-      onPanResponderMove: (_, g) => {
-        dx = g.dx;
-      },
-
-      onPanResponderRelease: () => {
-
-        if (dx > 80) {
-          setReplyTo(item);
-        }
-
-        dx = 0;
-      }
-    });
+    setSelected(null);
   };
 
   const formatTime = (t) => {
@@ -173,9 +142,7 @@ export default function Chat() {
 
     if (!t?.toDate) return "";
 
-    const d = t.toDate();
-
-    return d.toDateString();
+    return t.toDate().toDateString();
   };
 
   const renderItem = ({ item, index }) => {
@@ -188,39 +155,40 @@ export default function Chat() {
       !prev ||
       formatDate(prev.createdAt) !== formatDate(item.createdAt);
 
-    const anim = animValues[item.id] || new Animated.Value(1);
-
-    const pan = createPanResponder(item);
+    const animVal = anim[item.id] || new Animated.Value(1);
 
     return (
 
       <View>
 
-        {/* DAY */}
+        {/* DAY SEPARATOR */}
         {newDay && (
           <View style={styles.dayWrap}>
-            <Text style={styles.day}>{formatDate(item.createdAt)}</Text>
+            <Text style={styles.dayText}>
+              {formatDate(item.createdAt)}
+            </Text>
           </View>
         )}
 
+        {/* MESSAGE */}
         <Animated.View
-          {...pan.panHandlers}
           style={[
             styles.row,
             {
-              opacity: anim,
+              opacity: animVal,
               transform: [{
-                translateY: anim.interpolate({
+                translateY: animVal.interpolate({
                   inputRange: [0, 1],
                   outputRange: [20, 0]
                 })
-              }]
+              }],
+              alignSelf: isMine ? "flex-end" : "flex-start"
             }
           ]}
         >
 
           <TouchableOpacity
-            onLongPress={() => addReaction(item.id, "🔥")}
+            onLongPress={() => setSelected(item.id)}
             onPress={() => setReplyTo(item)}
             style={[
               styles.bubble,
@@ -228,7 +196,7 @@ export default function Chat() {
             ]}
           >
 
-            {/* reply preview */}
+            {/* REPLY */}
             {item.replyTo && (
               <View style={styles.replyBox}>
                 <Text style={styles.replyText}>
@@ -237,15 +205,17 @@ export default function Chat() {
               </View>
             )}
 
-            <Text style={styles.text}>
-              {item.text}
-            </Text>
+            <Text style={styles.user}>{item.user}</Text>
 
-            {/* reactions */}
+            <Text style={styles.text}>{item.text}</Text>
+
+            {/* REACTIONS */}
             {item.reactions?.length > 0 && (
               <View style={styles.reactions}>
                 {item.reactions.map((r, i) => (
-                  <Text key={i}>{r}</Text>
+                  <Text key={i} style={styles.react}>
+                    {r}
+                  </Text>
                 ))}
               </View>
             )}
@@ -255,6 +225,34 @@ export default function Chat() {
             </Text>
 
           </TouchableOpacity>
+
+          {/* EMOJI BAR */}
+          {selected === item.id && (
+            <View style={styles.emojiBar}>
+
+              {["🔥", "😂", "❤️", "👍", "😮"].map(e => (
+                <TouchableOpacity
+                  key={e}
+                  onPress={() => react(item.id, e)}
+                >
+                  <Text style={styles.emoji}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+
+            </View>
+          )}
+
+          {/* DELETE BUTTON */}
+          {item.user === user && selected === item.id && (
+            <TouchableOpacity
+              onPress={() => deleteMessage(item.id, item.user)}
+              style={styles.deleteBtn}
+            >
+              <Text style={{ color: "#fff", fontSize: 12 }}>
+                Cancella
+              </Text>
+            </TouchableOpacity>
+          )}
 
         </Animated.View>
 
@@ -267,19 +265,12 @@ export default function Chat() {
 
     <View style={styles.container}>
 
-      {/* header */}
+      {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.title}>LIVE CHAT</Text>
       </View>
 
-      {/* typing */}
-      {typingUsers.length > 0 && (
-        <Text style={styles.typing}>
-          {typingUsers.join(", ")} sta scrivendo...
-        </Text>
-      )}
-
-      {/* chat */}
+      {/* CHAT */}
       <FlatList
         ref={flatRef}
         data={messages}
@@ -288,23 +279,23 @@ export default function Chat() {
         contentContainerStyle={{ padding: 12 }}
       />
 
-      {/* reply preview */}
+      {/* REPLY PREVIEW */}
       {replyTo && (
         <View style={styles.replyPreview}>
-          <Text style={{ color: "#4dd0ff" }}>
-            Risposta a: {replyTo.text}
+          <Text style={styles.replyPreviewText}>
+            Rispondi a: {replyTo.text}
           </Text>
         </View>
       )}
 
-      {/* input */}
-      <View style={styles.inputWrap}>
+      {/* INPUT */}
+      <View style={styles.inputRow}>
 
         <TextInput
           value={msg}
-          onChangeText={handleTyping}
+          onChangeText={setMsg}
           style={styles.input}
-          placeholder="Messaggio..."
+          placeholder="Scrivi..."
           placeholderTextColor="#666"
         />
 
@@ -320,37 +311,90 @@ export default function Chat() {
 
 const styles = {
 
-  container: { flex: 1, backgroundColor: "#05060a" },
+  container: {
+    flex: 1,
+    backgroundColor: "#05060a"
+  },
 
   header: {
     paddingTop: 60,
-    alignItems: "center",
-    paddingBottom: 10
+    paddingBottom: 10,
+    alignItems: "center"
   },
 
-  title: { color: "#4dd0ff", letterSpacing: 3 },
-
-  typing: {
-    color: "#888",
-    paddingLeft: 10,
-    fontSize: 12
+  title: {
+    color: "#4dd0ff",
+    fontSize: 18,
+    letterSpacing: 3
   },
 
-  row: { marginVertical: 6 },
+  row: {
+    marginVertical: 6
+  },
 
   bubble: {
-    maxWidth: "78%",
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 14,
+    maxWidth: "78%",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)"
+  },
+
+  me: {
+    backgroundColor: "rgba(77,208,255,0.12)"
+  },
+
+  other: {
     backgroundColor: "rgba(255,255,255,0.05)"
   },
 
-  me: { alignSelf: "flex-end" },
-  other: { alignSelf: "flex-start" },
+  user: {
+    color: "#4dd0ff",
+    fontSize: 12,
+    marginBottom: 4
+  },
 
-  text: { color: "#fff" },
+  text: {
+    color: "#fff",
+    fontSize: 15
+  },
 
-  time: { fontSize: 10, color: "#777", marginTop: 6 },
+  time: {
+    fontSize: 10,
+    color: "#777",
+    marginTop: 6,
+    textAlign: "right"
+  },
+
+  reactions: {
+    flexDirection: "row",
+    marginTop: 6
+  },
+
+  react: {
+    marginRight: 4
+  },
+
+  emojiBar: {
+    flexDirection: "row",
+    marginLeft: 8
+  },
+
+  emoji: {
+    fontSize: 18,
+    marginHorizontal: 4
+  },
+
+  dayWrap: {
+    alignItems: "center",
+    marginVertical: 10
+  },
+
+  dayText: {
+    color: "#555",
+    fontSize: 12
+  },
 
   replyBox: {
     borderLeftWidth: 2,
@@ -359,15 +403,22 @@ const styles = {
     marginBottom: 4
   },
 
-  replyText: { color: "#aaa", fontSize: 11 },
+  replyText: {
+    color: "#aaa",
+    fontSize: 11
+  },
 
-  reactions: { flexDirection: "row", marginTop: 4 },
+  replyPreview: {
+    paddingLeft: 10,
+    paddingBottom: 5
+  },
 
-  dayWrap: { alignItems: "center", marginVertical: 10 },
+  replyPreviewText: {
+    color: "#4dd0ff",
+    fontSize: 12
+  },
 
-  day: { color: "#555", fontSize: 12 },
-
-  inputWrap: {
+  inputRow: {
     flexDirection: "row",
     padding: 10,
     backgroundColor: "#070a12"
@@ -377,7 +428,7 @@ const styles = {
     flex: 1,
     backgroundColor: "#111",
     color: "#fff",
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12
   },
 
@@ -388,12 +439,15 @@ const styles = {
     backgroundColor: "#4dd0ff",
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 12
+    borderRadius: 10
   },
 
-  replyPreview: {
-    paddingLeft: 10,
-    paddingBottom: 5
+  deleteBtn: {
+    marginTop: 6,
+    padding: 6,
+    backgroundColor: "#ff3b3b",
+    borderRadius: 8,
+    alignSelf: "flex-start"
   }
 
 };
