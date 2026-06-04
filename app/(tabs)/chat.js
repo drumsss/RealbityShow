@@ -52,20 +52,19 @@ export default function Chat() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-
       setMessages(
         snap.docs.map(d => ({
           id: d.id,
           ...d.data()
         }))
       );
-
     });
 
     return unsub;
 
   }, []);
 
+  // 📩 TEXT MESSAGE
   const send = async () => {
 
     if (!msg.trim()) return;
@@ -118,11 +117,11 @@ export default function Chat() {
       setRecording(rec);
 
     } catch (e) {
-      console.log(e);
+      console.log("START REC ERROR", e);
     }
   };
 
-  // 🛑 STOP + UPLOAD FIXATO
+  // 🛑 STOP + UPLOAD (FIX DEFINITIVO)
   const stopRecording = async () => {
 
     try {
@@ -132,7 +131,6 @@ export default function Chat() {
       await recording.stopAndUnloadAsync();
 
       const uri = recording.getURI();
-
       const status = await recording.getStatusAsync();
 
       const duration = Math.floor(
@@ -141,16 +139,16 @@ export default function Chat() {
 
       setRecording(null);
 
-      // 🔥 FIX STABILE EXPO: arrayBuffer invece di blob/fileSystem
+      // 🔥 FETCH FILE → BLOB (metodo stabile Expo)
       const response = await fetch(uri);
-      const arrayBuffer = await response.arrayBuffer();
+      const blob = await response.blob();
 
       const fileRef = ref(
         storage,
         `audio/${Date.now()}.m4a`
       );
 
-      await uploadBytes(fileRef, arrayBuffer, {
+      await uploadBytes(fileRef, blob, {
         contentType: "audio/m4a"
       });
 
@@ -169,23 +167,21 @@ export default function Chat() {
     }
   };
 
-  // ▶ PLAY AUDIO
+  // ▶ PLAY / PAUSE (WHATSAPP STYLE)
   const playAudio = async (uri, id) => {
 
     try {
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true
-      });
-
       if (soundRef.current && playingId === id) {
 
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
+        const status = await soundRef.current.getStatusAsync();
 
-        soundRef.current = null;
-        setPlayingId(null);
+        if (status.isPlaying) {
+          await soundRef.current.pauseAsync();
+        } else {
+          await soundRef.current.playAsync();
+        }
+
         return;
       }
 
@@ -208,10 +204,11 @@ export default function Chat() {
       await sound.playAsync();
 
     } catch (e) {
-      console.log(e);
+      console.log("PLAY ERROR", e);
     }
   };
 
+  // ⏱ TIME FORMAT
   const formatTime = (t) => {
 
     if (!t?.toDate) return "";
