@@ -1,8 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { doc, onSnapshot } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { Animated, Dimensions, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Image, Text, TouchableOpacity, View } from "react-native";
 import { db } from "../../firebase";
 
 const { width } = Dimensions.get("window");
@@ -17,10 +17,17 @@ export default function Home() {
   const anim1 = useState(new Animated.Value(1))[0];
   const anim2 = useState(new Animated.Value(1))[0];
 
+  // 🎬 LOGO ANIMATION
+  const logoScale = useRef(new Animated.Value(0.4)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoY = useRef(new Animated.Value(-30)).current;
+
+  const glowPulse = useRef(new Animated.Value(0)).current;
+
   const animate = (a) => {
     Animated.sequence([
       Animated.timing(a, {
-        toValue: 1.08,
+        toValue: 1.07,
         duration: 120,
         useNativeDriver: true
       }),
@@ -33,6 +40,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+
     const unsub1 = onSnapshot(doc(db, "teams", "beauties"), (snap) => {
       setBeauties(snap.data()?.totalPoints || 0);
       animate(anim1);
@@ -60,11 +68,55 @@ export default function Home() {
       return () => clearInterval(interval);
     });
 
+    // 🚀 INTRO LOGO PIÙ DINAMICO
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true
+        }),
+        Animated.timing(logoY, {
+          toValue: 0,
+          duration: 450,
+          useNativeDriver: true
+        })
+      ]),
+      Animated.spring(logoScale, {
+        toValue: 1.35,
+        friction: 3,
+        tension: 90,
+        useNativeDriver: true
+      }),
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 180,
+        useNativeDriver: true
+      })
+    ]).start();
+
+    // 🌊 glow continuo
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: false
+        }),
+        Animated.timing(glowPulse, {
+          toValue: 0,
+          duration: 900,
+          useNativeDriver: false
+        })
+      ])
+    ).start();
+
     return () => {
       unsub1();
       unsub2();
       unsub3();
     };
+
   }, []);
 
   const format = (ms) => {
@@ -79,10 +131,30 @@ export default function Home() {
       colors={["#050505", "#0f0f0f", "#1a001f"]}
       style={styles.container}
     >
+
       <View style={styles.glow1} />
       <View style={styles.glow2} />
 
-      <Text style={styles.title}>REALBITY SHOW</Text>
+      {/* 🔥 LOGO PIÙ GRANDE + DINAMICO */}
+      <Animated.View
+        style={[
+          styles.logoWrap,
+          {
+            opacity: logoOpacity,
+            transform: [
+              { translateY: logoY },
+              { scale: logoScale }
+            ]
+          }
+        ]}
+      >
+        <Image
+          source={require("../../assets/logo_colori.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </Animated.View>
+
       <Text style={styles.subtitle}>LIVE SCOREBOARD</Text>
 
       {/* TIMER */}
@@ -93,42 +165,27 @@ export default function Home() {
         </Text>
       </LinearGradient>
 
-      {/* CLASSIFICA */}
+      {/* BOARD */}
       <View style={styles.board}>
-        <Animated.View
-          style={[
-            styles.teamCard,
-            styles.blueBorder,
-            { transform: [{ scale: anim1 }] }
-          ]}
-        >
+        <Animated.View style={[styles.teamCard, styles.blueBorder, { transform: [{ scale: anim1 }] }]}>
           <View>
             <Text style={styles.teamLabel}>TEAM</Text>
             <Text style={styles.beautiesTeam}>BEAUTIES</Text>
           </View>
-
           <Text style={styles.beautiesPoints}>{beauties}</Text>
         </Animated.View>
 
-        <Animated.View
-          style={[
-            styles.teamCard,
-            styles.purpleBorder,
-            { transform: [{ scale: anim2 }] }
-          ]}
-        >
+        <Animated.View style={[styles.teamCard, styles.purpleBorder, { transform: [{ scale: anim2 }] }]}>
           <View>
             <Text style={styles.teamLabel}>TEAM</Text>
             <Text style={styles.licataTeam}>LICATADRUMS</Text>
           </View>
-
           <Text style={styles.licataPoints}>{licata}</Text>
         </Animated.View>
       </View>
 
       {/* ADMIN */}
       <TouchableOpacity
-        activeOpacity={0.8}
         style={styles.adminBtn}
         onPress={() => router.push("/admin")}
       >
@@ -139,6 +196,7 @@ export default function Home() {
           <Text style={styles.adminTxt}>ADMIN PANEL</Text>
         </LinearGradient>
       </TouchableOpacity>
+
     </LinearGradient>
   );
 }
@@ -147,46 +205,50 @@ const styles = {
   container: {
     flex: 1,
     alignItems: "center",
-    paddingTop: 70,
+    paddingTop: 65,
     overflow: "hidden"
   },
 
   glow1: {
     position: "absolute",
-    width: 250,
-    height: 250,
+    width: 280,
+    height: 280,
     borderRadius: 999,
     backgroundColor: "#6a00ff",
     opacity: 0.18,
-    top: -50,
-    right: -80
+    top: -60,
+    right: -90
   },
 
   glow2: {
     position: "absolute",
-    width: 220,
-    height: 220,
+    width: 240,
+    height: 240,
     borderRadius: 999,
     backgroundColor: "#00bfff",
     opacity: 0.15,
-    bottom: 100,
-    left: -70
+    bottom: 90,
+    left: -80
   },
 
-  title: {
-    color: "#fff",
-    fontSize: 42,
-    fontWeight: "900"
+  logoWrap: {
+    marginBottom: 10
+  },
+
+  logo: {
+    width: 240,
+    height: 240
   },
 
   subtitle: {
     color: "#888",
-    marginTop: 5
+    marginTop: 4,
+    fontSize: 13
   },
 
   timerBox: {
-    marginTop: 30,
-    paddingVertical: 22,
+    marginTop: 24,
+    paddingVertical: 20,
     borderRadius: 24,
     width: width * 0.88,
     alignItems: "center",
@@ -194,26 +256,24 @@ const styles = {
     borderColor: "#333"
   },
 
-  timerLabel: {
-    color: "#ffd700"
-  },
+  timerLabel: { color: "#ffd700", fontSize: 12 },
 
   timer: {
     color: "#fff",
-    fontSize: 54,
+    fontSize: 52,
     fontWeight: "900"
   },
 
   board: {
     width: width * 0.88,
-    marginTop: 30
+    marginTop: 24
   },
 
   teamCard: {
     backgroundColor: "rgba(20,20,20,0.95)",
-    padding: 22,
+    padding: 20,
     borderRadius: 24,
-    marginBottom: 18,
+    marginBottom: 14,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -223,39 +283,21 @@ const styles = {
   blueBorder: { borderColor: "#00bfff" },
   purpleBorder: { borderColor: "#a020f0" },
 
-  teamLabel: { color: "#666" },
+  teamLabel: { color: "#666", fontSize: 12 },
 
-  beautiesTeam: {
-    color: "#00bfff",
-    fontSize: 24,
-    fontWeight: "900"
-  },
+  beautiesTeam: { color: "#00bfff", fontSize: 22, fontWeight: "900" },
+  licataTeam: { color: "#c05cff", fontSize: 22, fontWeight: "900" },
 
-  beautiesPoints: {
-    color: "#00bfff",
-    fontSize: 38,
-    fontWeight: "900"
-  },
-
-  licataTeam: {
-    color: "#c05cff",
-    fontSize: 24,
-    fontWeight: "900"
-  },
-
-  licataPoints: {
-    color: "#c05cff",
-    fontSize: 38,
-    fontWeight: "900"
-  },
+  beautiesPoints: { color: "#00bfff", fontSize: 34, fontWeight: "900" },
+  licataPoints: { color: "#c05cff", fontSize: 34, fontWeight: "900" },
 
   adminBtn: {
     width: width * 0.88,
-    marginTop: 20
+    marginTop: 18
   },
 
   adminGradient: {
-    paddingVertical: 16,
+    paddingVertical: 15,
     borderRadius: 20
   },
 

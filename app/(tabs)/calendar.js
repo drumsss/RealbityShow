@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
   ScrollView,
   Text,
@@ -37,6 +38,15 @@ export default function Calendar() {
     sunday: "SUNDAY"
   };
 
+  // 🎬 LOGO ANIM
+  const logoScale = useRef(new Animated.Value(0.6)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoTranslate = useRef(new Animated.Value(-20)).current;
+  const logoGlow = useRef(new Animated.Value(0)).current;
+
+  const glitchX = useRef(new Animated.Value(0)).current;
+  const glitchOpacity = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
 
     const unsub = days.map(day =>
@@ -51,7 +61,83 @@ export default function Calendar() {
       )
     );
 
-    return () => unsub.forEach(u => u());
+    // 🎬 INTRO ANIMATION
+    Animated.sequence([
+
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true
+        }),
+        Animated.timing(logoTranslate, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true
+        })
+      ]),
+
+      Animated.timing(logoScale, {
+        toValue: 1.15,
+        duration: 350,
+        useNativeDriver: true
+      }),
+
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true
+      })
+
+    ]).start(() => {
+
+      // glow loop
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(logoGlow, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false
+          }),
+          Animated.timing(logoGlow, {
+            toValue: 0,
+            duration: 1200,
+            useNativeDriver: false
+          })
+        ])
+      ).start();
+
+    });
+
+    // 📺 GLITCH LOOP
+    const interval = setInterval(() => {
+
+      if (Math.random() > 0.7) {
+
+        const rx = (Math.random() - 0.5) * 5;
+
+        Animated.sequence([
+          Animated.timing(glitchX, {
+            toValue: rx,
+            duration: 60,
+            useNativeDriver: true
+          }),
+          Animated.timing(glitchX, {
+            toValue: 0,
+            duration: 80,
+            useNativeDriver: true
+          })
+        ]).start();
+
+      }
+
+    }, 2500);
+
+    return () => {
+      unsub.forEach(u => u());
+      clearInterval(interval);
+    };
+
   }, []);
 
   return (
@@ -63,6 +149,36 @@ export default function Calendar() {
 
       <View style={styles.glow1} />
       <View style={styles.glow2} />
+
+      {/* 🎬 LOGO TOP */}
+      <Animated.View
+        style={[
+          styles.logoWrap,
+          {
+            opacity: logoOpacity,
+            transform: [
+              { translateY: logoTranslate },
+              { scale: logoScale },
+              { translateX: glitchX }
+            ],
+            shadowOpacity: logoGlow.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.2, 0.9]
+            })
+          }
+        ]}
+      >
+
+        <Animated.Image
+          source={require("../../assets/logo_bw.png")}
+          style={[
+            styles.logo,
+            { opacity: glitchOpacity }
+          ]}
+          resizeMode="contain"
+        />
+
+      </Animated.View>
 
       {/* HEADER */}
       <View style={styles.header}>
@@ -146,6 +262,19 @@ const styles = {
     left: -120
   },
 
+  logoWrap: {
+    marginBottom: 10,
+    shadowColor: "#00d4ff",
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 12
+  },
+
+  logo: {
+    width: 70,
+    height: 70
+  },
+
   header: {
     alignItems: "center",
     marginBottom: 25
@@ -173,17 +302,13 @@ const styles = {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-
     backgroundColor: "rgba(255,255,255,0.04)",
-
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
-
     shadowColor: "#000",
     shadowOpacity: 0.7,
     shadowRadius: 25,
     elevation: 14,
-
     overflow: "hidden"
   },
 
@@ -195,10 +320,7 @@ const styles = {
     transform: [{ rotate: "10deg" }]
   },
 
-  left: {
-    flex: 1,
-    zIndex: 2
-  },
+  left: { flex: 1, zIndex: 2 },
 
   day: {
     color: "#fff",
@@ -228,7 +350,6 @@ const styles = {
     borderRadius: 999,
     justifyContent: "center",
     alignItems: "center",
-
     backgroundColor: "rgba(0,0,0,0.45)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.10)"

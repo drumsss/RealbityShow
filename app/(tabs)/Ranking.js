@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Dimensions,
   ScrollView,
   Text,
@@ -15,6 +16,15 @@ const { width } = Dimensions.get("window");
 export default function Leaderboard() {
 
   const [players, setPlayers] = useState([]);
+
+  // 🎬 LOGO ANIM
+  const logoScale = useRef(new Animated.Value(0.6)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoTranslate = useRef(new Animated.Value(-20)).current;
+  const logoGlow = useRef(new Animated.Value(0)).current;
+
+  const glitchX = useRef(new Animated.Value(0)).current;
+  const glitchOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
 
@@ -32,7 +42,6 @@ export default function Leaderboard() {
           };
         });
 
-        // 🔥 FIX DUPLICATI: merge per nome
         const map = new Map();
 
         raw.forEach(p => {
@@ -52,14 +61,87 @@ export default function Leaderboard() {
         });
 
         const cleaned = Array.from(map.values());
-
         cleaned.sort((a, b) => b.points - a.points);
 
         setPlayers(cleaned);
       }
     );
 
-    return unsub;
+    // 🎬 INTRO LOGO
+    Animated.sequence([
+
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true
+        }),
+        Animated.timing(logoTranslate, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true
+        })
+      ]),
+
+      Animated.timing(logoScale, {
+        toValue: 1.15,
+        duration: 350,
+        useNativeDriver: true
+      }),
+
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true
+      })
+
+    ]).start(() => {
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(logoGlow, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false
+          }),
+          Animated.timing(logoGlow, {
+            toValue: 0,
+            duration: 1200,
+            useNativeDriver: false
+          })
+        ])
+      ).start();
+
+    });
+
+    // 📺 GLITCH LOOP
+    const interval = setInterval(() => {
+
+      if (Math.random() > 0.7) {
+
+        const rx = (Math.random() - 0.5) * 5;
+
+        Animated.sequence([
+          Animated.timing(glitchX, {
+            toValue: rx,
+            duration: 60,
+            useNativeDriver: true
+          }),
+          Animated.timing(glitchX, {
+            toValue: 0,
+            duration: 80,
+            useNativeDriver: true
+          })
+        ]).start();
+
+      }
+
+    }, 2500);
+
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
 
   }, []);
 
@@ -76,10 +158,7 @@ export default function Leaderboard() {
     return "#ffffff";
   };
 
-  // 🔥 SFONDO UGUALE PER TUTTI
-  const getCardGradient = () => {
-    return ["#1a1a1a", "#0b0b0b"];
-  };
+  const getCardGradient = () => ["#1a1a1a", "#0b0b0b"];
 
   const getGlowColor = (index) => {
     if (index === 0) return "#ffd700";
@@ -97,6 +176,36 @@ export default function Leaderboard() {
 
       <View style={styles.glow1} />
       <View style={styles.glow2} />
+
+      {/* 🎬 LOGO */}
+      <Animated.View
+        style={[
+          styles.logoWrap,
+          {
+            opacity: logoOpacity,
+            transform: [
+              { translateY: logoTranslate },
+              { scale: logoScale },
+              { translateX: glitchX }
+            ],
+            shadowOpacity: logoGlow.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.2, 0.9]
+            })
+          }
+        ]}
+      >
+
+        <Animated.Image
+          source={require("../../assets/logo_bw.png")}
+          style={[
+            styles.logo,
+            { opacity: glitchOpacity }
+          ]}
+          resizeMode="contain"
+        />
+
+      </Animated.View>
 
       <Text style={styles.title}>CLASSIFICA</Text>
       <Text style={styles.subtitle}>REALBITY SHOW</Text>
@@ -204,6 +313,20 @@ const styles = {
     opacity: 0.12,
     bottom: 20,
     left: -90
+  },
+
+  logoWrap: {
+    marginTop: 10,
+    marginBottom: 10,
+    shadowColor: "#00d4ff",
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 12
+  },
+
+  logo: {
+    width: 70,
+    height: 70
   },
 
   title: {

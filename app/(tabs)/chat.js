@@ -39,6 +39,19 @@ export default function Chat() {
   const anim = useRef({}).current;
   const trans = useRef({}).current;
 
+  // 🎬 LOGO ANIMATION
+  const logoScale = useRef(new Animated.Value(0.6)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoTranslate = useRef(new Animated.Value(-20)).current;
+
+  // ✨ GLOW
+  const logoGlow = useRef(new Animated.Value(0)).current;
+
+  // 📺 GLITCH
+  const glitchX = useRef(new Animated.Value(0)).current;
+  const glitchY = useRef(new Animated.Value(0)).current;
+  const glitchOpacity = useRef(new Animated.Value(1)).current;
+
   useEffect(() => {
 
     getUser().then(setUser);
@@ -74,7 +87,110 @@ export default function Chat() {
 
     });
 
-    return unsub;
+    // 🎬 INTRO TV ANIMATION
+    Animated.sequence([
+
+      Animated.parallel([
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true
+        }),
+        Animated.timing(logoTranslate, {
+          toValue: 0,
+          duration: 600,
+          useNativeDriver: true
+        })
+      ]),
+
+      Animated.timing(logoScale, {
+        toValue: 1.15,
+        duration: 350,
+        useNativeDriver: true
+      }),
+
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true
+      })
+
+    ]).start(() => {
+
+      // 🔥 GLOW LOOP
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(logoGlow, {
+            toValue: 1,
+            duration: 1200,
+            useNativeDriver: false
+          }),
+          Animated.timing(logoGlow, {
+            toValue: 0,
+            duration: 1200,
+            useNativeDriver: false
+          })
+        ])
+      ).start();
+
+    });
+
+    // 📺 GLITCH LOOP
+    const interval = setInterval(() => {
+
+      if (Math.random() > 0.65) {
+
+        const rx = (Math.random() - 0.5) * 6;
+        const ry = (Math.random() - 0.5) * 6;
+        const flicker = Math.random() > 0.5 ? 0.6 : 1;
+
+        Animated.sequence([
+
+          Animated.parallel([
+            Animated.timing(glitchX, {
+              toValue: rx,
+              duration: 60,
+              useNativeDriver: true
+            }),
+            Animated.timing(glitchY, {
+              toValue: ry,
+              duration: 60,
+              useNativeDriver: true
+            }),
+            Animated.timing(glitchOpacity, {
+              toValue: flicker,
+              duration: 60,
+              useNativeDriver: true
+            })
+          ]),
+
+          Animated.parallel([
+            Animated.timing(glitchX, {
+              toValue: 0,
+              duration: 80,
+              useNativeDriver: true
+            }),
+            Animated.timing(glitchY, {
+              toValue: 0,
+              duration: 80,
+              useNativeDriver: true
+            }),
+            Animated.timing(glitchOpacity, {
+              toValue: 1,
+              duration: 80,
+              useNativeDriver: true
+            })
+          ])
+
+        ]).start();
+      }
+
+    }, 2500);
+
+    return () => {
+      clearInterval(interval);
+      unsub();
+    };
 
   }, []);
 
@@ -108,7 +224,7 @@ export default function Chat() {
     setReplyTo(null);
   };
 
-  // 🗑 DELETE CON ANIMAZIONE + VIBRAZIONE
+  // 🗑 DELETE
   const deleteMessage = (id, owner) => {
 
     if (owner !== user) return;
@@ -139,7 +255,6 @@ export default function Chat() {
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  // 🎯 SWIPE GESTURE
   const createPan = (item) => {
 
     const panResponder = PanResponder.create({
@@ -153,15 +268,9 @@ export default function Chat() {
 
       onPanResponderRelease: (_, g) => {
 
-        // 👉 reply
-        if (g.dx > 70) {
-          setReplyTo(item);
-        }
+        if (g.dx > 70) setReplyTo(item);
 
-        // 👈 delete
-        if (g.dx < -80) {
-          deleteMessage(item.id, item.user);
-        }
+        if (g.dx < -80) deleteMessage(item.id, item.user);
 
         Animated.spring(trans[item.id], {
           toValue: 0,
@@ -202,9 +311,7 @@ export default function Chat() {
           ]}
         >
 
-          <Text style={styles.user}>
-            {item.user}
-          </Text>
+          <Text style={styles.user}>{item.user}</Text>
 
           {item.replyTo && (
             <Text style={styles.replyText}>
@@ -212,13 +319,9 @@ export default function Chat() {
             </Text>
           )}
 
-          <Text style={styles.text}>
-            {item.text}
-          </Text>
+          <Text style={styles.text}>{item.text}</Text>
 
-          <Text style={styles.time}>
-            {formatTime(item.createdAt)}
-          </Text>
+          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
 
         </Animated.View>
 
@@ -231,8 +334,42 @@ export default function Chat() {
 
     <View style={styles.container}>
 
+      {/* 📺 HEADER TV STYLE */}
       <View style={styles.header}>
+
+        <Animated.View
+          style={[
+            styles.logoWrapper,
+            {
+              opacity: logoOpacity,
+              transform: [
+                { translateY: logoTranslate },
+                { scale: logoScale },
+                { translateX: glitchX }
+              ],
+              shadowOpacity: logoGlow.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0.2, 0.9]
+              })
+            }
+          ]}
+        >
+
+          <Animated.Image
+            source={require("../../assets/logo_bw.png")}
+            style={[
+              styles.logo,
+              {
+                opacity: glitchOpacity
+              }
+            ]}
+            resizeMode="contain"
+          />
+
+        </Animated.View>
+
         <Text style={styles.title}>LIVE CHAT</Text>
+
       </View>
 
       <FlatList
@@ -273,22 +410,40 @@ export default function Chat() {
 
 const styles = {
 
-  container: {
-    flex: 1,
-    backgroundColor: "#05060a"
+  container: { flex: 1, backgroundColor: "#05060a" },
+
+  header: {
+    paddingTop: 50,
+    paddingBottom: 12,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)"
   },
 
-  row: {
-    marginVertical: 6
+  logoWrapper: {
+    marginBottom: 6,
+    shadowColor: "#4dd0ff",
+    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 12
   },
 
-  left: {
-    alignItems: "flex-start"
+  logo: {
+    width: 75,
+    height: 75
   },
 
-  right: {
-    alignItems: "flex-end"
+  title: {
+    color: "#4dd0ff",
+    fontSize: 20,
+    fontWeight: "600",
+    letterSpacing: 2
   },
+
+  row: { marginVertical: 6 },
+
+  left: { alignItems: "flex-start" },
+  right: { alignItems: "flex-end" },
 
   bubble: {
     maxWidth: "78%",
@@ -297,45 +452,20 @@ const styles = {
     backgroundColor: "rgba(255,255,255,0.05)"
   },
 
-  me: {
-    backgroundColor: "rgba(77,208,255,0.12)"
-  },
+  me: { backgroundColor: "rgba(77,208,255,0.12)" },
+  other: { backgroundColor: "rgba(255,255,255,0.05)" },
 
-  other: {
-    backgroundColor: "rgba(255,255,255,0.05)"
-  },
+  user: { color: "#4dd0ff", fontSize: 12, marginBottom: 4 },
 
-  user: {
-    color: "#4dd0ff",
-    fontSize: 12,
-    marginBottom: 4
-  },
+  text: { color: "#fff", fontSize: 15 },
 
-  text: {
-    color: "#fff",
-    fontSize: 15
-  },
+  time: { fontSize: 10, color: "#777", marginTop: 6, textAlign: "right" },
 
-  time: {
-    fontSize: 10,
-    color: "#777",
-    marginTop: 6,
-    textAlign: "right"
-  },
+  replyText: { color: "#aaa", fontSize: 11, marginBottom: 4 },
 
-  replyText: {
-    color: "#aaa",
-    fontSize: 11,
-    marginBottom: 4
-  },
+  replyPreview: { padding: 10 },
 
-  replyPreview: {
-    padding: 10
-  },
-
-  replyPreviewText: {
-    color: "#4dd0ff"
-  },
+  replyPreviewText: { color: "#4dd0ff" },
 
   inputRow: {
     flexDirection: "row",
