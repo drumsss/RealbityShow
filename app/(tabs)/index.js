@@ -17,23 +17,20 @@ export default function Home() {
   const anim1 = useState(new Animated.Value(1))[0];
   const anim2 = useState(new Animated.Value(1))[0];
 
-  // 🎬 LOGO
-  const logoScale = useRef(new Animated.Value(0.35)).current;
+  const logoScale = useRef(new Animated.Value(0.33)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoY = useRef(new Animated.Value(-25)).current;
-
-  const glowPulse = useRef(new Animated.Value(0)).current;
+  const logoY = useRef(new Animated.Value(-20)).current;
 
   const animate = (a) => {
     Animated.sequence([
       Animated.timing(a, {
-        toValue: 1.05,
-        duration: 120,
+        toValue: 1.04,
+        duration: 110,
         useNativeDriver: true
       }),
       Animated.timing(a, {
         toValue: 1,
-        duration: 120,
+        duration: 110,
         useNativeDriver: true
       })
     ]).start();
@@ -68,48 +65,31 @@ export default function Home() {
       return () => clearInterval(interval);
     });
 
-    // 🎥 INTRO CINEMATICO
     Animated.sequence([
       Animated.parallel([
         Animated.timing(logoOpacity, {
           toValue: 1,
-          duration: 300,
+          duration: 260,
           useNativeDriver: true
         }),
         Animated.timing(logoY, {
           toValue: 0,
-          duration: 500,
+          duration: 420,
           useNativeDriver: true
         })
       ]),
       Animated.spring(logoScale, {
-        toValue: 1.25,
-        friction: 4,
-        tension: 80,
+        toValue: 1.22,
+        friction: 5,
+        tension: 70,
         useNativeDriver: true
       }),
       Animated.timing(logoScale, {
         toValue: 1,
-        duration: 180,
+        duration: 160,
         useNativeDriver: true
       })
     ]).start();
-
-    // 🌊 glow soft continuo
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowPulse, {
-          toValue: 1,
-          duration: 1200,
-          useNativeDriver: false
-        }),
-        Animated.timing(glowPulse, {
-          toValue: 0,
-          duration: 1200,
-          useNativeDriver: false
-        })
-      ])
-    ).start();
 
     return () => {
       unsub1();
@@ -135,7 +115,7 @@ export default function Home() {
       <View style={styles.glow1} />
       <View style={styles.glow2} />
 
-      {/* 🎬 LOGO (piccolo aggiustamento) */}
+      {/* LOGO */}
       <Animated.View
         style={[
           styles.logoWrap,
@@ -205,75 +185,75 @@ const styles = {
   container: {
     flex: 1,
     alignItems: "center",
-    paddingTop: 55, // 🔧 più compatto
+    paddingTop: 52,
     overflow: "hidden"
   },
 
   glow1: {
     position: "absolute",
-    width: 260,
-    height: 260,
+    width: 240,
+    height: 240,
     borderRadius: 999,
     backgroundColor: "#6a00ff",
-    opacity: 0.14,
-    top: -70,
+    opacity: 0.12,
+    top: -80,
     right: -90
   },
 
   glow2: {
     position: "absolute",
-    width: 220,
-    height: 220,
+    width: 200,
+    height: 200,
     borderRadius: 999,
     backgroundColor: "#00bfff",
-    opacity: 0.12,
-    bottom: 80,
+    opacity: 0.1,
+    bottom: 70,
     left: -70
   },
 
   logoWrap: {
-    marginBottom: 6
+    marginBottom: 4
   },
 
   logo: {
-    width: 210,   // 🔧 leggermente ridotto
-    height: 210
+    width: 195,
+    height: 195
   },
 
   subtitle: {
     color: "#888",
-    marginTop: 2,
-    fontSize: 12
+    fontSize: 11,
+    marginTop: 2
   },
 
   timerBox: {
-    marginTop: 18,
-    paddingVertical: 16,
-    borderRadius: 22,
-    width: width * 0.86,
+    marginTop: 14,
+    paddingVertical: 14,
+    borderRadius: 20,
+    width: width * 0.84,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#333"
   },
 
-  timerLabel: { color: "#ffd700", fontSize: 11 },
+  timerLabel: { color: "#ffd700", fontSize: 10 },
 
   timer: {
     color: "#fff",
-    fontSize: 48,
+    fontSize: 44,
     fontWeight: "900"
   },
 
   board: {
-    width: width * 0.86,
-    marginTop: 18
+    width: width * 0.84,
+    marginTop: 14
   },
 
   teamCard: {
     backgroundColor: "rgba(20,20,20,0.95)",
-    padding: 18,
-    borderRadius: 22,
-    marginBottom: 12,
+    padding: 16,
+    borderRadius: 20,
+    marginBottom: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -283,22 +263,22 @@ const styles = {
   blueBorder: { borderColor: "#00bfff" },
   purpleBorder: { borderColor: "#a020f0" },
 
-  teamLabel: { color: "#666", fontSize: 11 },
+  teamLabel: { color: "#666", fontSize: 10 },
 
-  beautiesTeam: { color: "#00bfff", fontSize: 20, fontWeight: "900" },
-  licataTeam: { color: "#c05cff", fontSize: 20, fontWeight: "900" },
+  beautiesTeam: { color: "#00bfff", fontSize: 18, fontWeight: "900" },
+  licataTeam: { color: "#c05cff", fontSize: 18, fontWeight: "900" },
 
-  beautiesPoints: { color: "#00bfff", fontSize: 32, fontWeight: "900" },
-  licataPoints: { color: "#c05cff", fontSize: 32, fontWeight: "900" },
+  beautiesPoints: { color: "#00bfff", fontSize: 30, fontWeight: "900" },
+  licataPoints: { color: "#c05cff", fontSize: 30, fontWeight: "900" },
 
   adminBtn: {
-    width: width * 0.86,
-    marginTop: 14
+    width: width * 0.84,
+    marginTop: 12
   },
 
   adminGradient: {
-    paddingVertical: 14,
-    borderRadius: 18
+    paddingVertical: 12,
+    borderRadius: 16
   },
 
   adminTxt: {
