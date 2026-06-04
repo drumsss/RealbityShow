@@ -3,11 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
+  PanResponder,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
+
+import * as Haptics from "expo-haptics";
 
 import {
   addDoc,
@@ -18,8 +21,7 @@ import {
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  updateDoc
+  serverTimestamp
 } from "firebase/firestore";
 
 import { db } from "../../firebase";
@@ -31,10 +33,11 @@ export default function Chat() {
   const [user, setUser] = useState("");
   const [messages, setMessages] = useState([]);
   const [replyTo, setReplyTo] = useState(null);
-  const [selected, setSelected] = useState(null);
 
   const flatRef = useRef();
+
   const anim = useRef({}).current;
+  const trans = useRef({}).current;
 
   useEffect(() => {
 
@@ -53,14 +56,13 @@ export default function Chat() {
       }));
 
       data.forEach(m => {
-        if (!anim[m.id]) {
-          anim[m.id] = new Animated.Value(0);
 
-          Animated.spring(anim[m.id], {
-            toValue: 1,
-            useNativeDriver: true,
-            friction: 7
-          }).start();
+        if (!anim[m.id]) {
+          anim[m.id] = new Animated.Value(1);
+        }
+
+        if (!trans[m.id]) {
+          trans[m.id] = new Animated.Value(0);
         }
       });
 
@@ -68,7 +70,7 @@ export default function Chat() {
 
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      }, 120);
 
     });
 
@@ -76,7 +78,7 @@ export default function Chat() {
 
   }, []);
 
-  // 🧹 CLEAN CHAT
+  // 📩 SEND
   const send = async () => {
 
     if (!msg.trim()) return;
@@ -99,160 +101,124 @@ export default function Chat() {
       text: msg,
       user,
       createdAt: serverTimestamp(),
-      replyTo: replyTo || null,
-      reactions: []
+      replyTo: replyTo || null
     });
 
     setMsg("");
     setReplyTo(null);
   };
 
-  // 🗑 DELETE MESSAGE
-  const deleteMessage = async (id, owner) => {
+  // 🗑 DELETE CON ANIMAZIONE + VIBRAZIONE
+  const deleteMessage = (id, owner) => {
 
     if (owner !== user) return;
 
-    await deleteDoc(doc(db, "messages", id));
-  };
+    Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success
+    );
 
-  // 😂 REACTION
-  const react = async (id, emoji) => {
-
-    const refMsg = doc(db, "messages", id);
-
-    const m = messages.find(x => x.id === id);
-
-    await updateDoc(refMsg, {
-      reactions: [...(m.reactions || []), emoji]
+    Animated.parallel([
+      Animated.timing(anim[id], {
+        toValue: 0,
+        duration: 180,
+        useNativeDriver: true
+      }),
+      Animated.timing(trans[id], {
+        toValue: -90,
+        duration: 180,
+        useNativeDriver: true
+      })
+    ]).start(() => {
+      deleteDoc(doc(db, "messages", id));
     });
-
-    setSelected(null);
   };
 
   const formatTime = (t) => {
-
     if (!t?.toDate) return "";
-
     const d = t.toDate();
-
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  const formatDate = (t) => {
+  // 🎯 SWIPE GESTURE
+  const createPan = (item) => {
 
-    if (!t?.toDate) return "";
+    const panResponder = PanResponder.create({
 
-    return t.toDate().toDateString();
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 10,
+
+      onPanResponderMove: (_, g) => {
+        trans[item.id].setValue(g.dx);
+      },
+
+      onPanResponderRelease: (_, g) => {
+
+        // 👉 reply
+        if (g.dx > 70) {
+          setReplyTo(item);
+        }
+
+        // 👈 delete
+        if (g.dx < -80) {
+          deleteMessage(item.id, item.user);
+        }
+
+        Animated.spring(trans[item.id], {
+          toValue: 0,
+          useNativeDriver: true
+        }).start();
+      }
+
+    });
+
+    return panResponder;
   };
 
-  const renderItem = ({ item, index }) => {
+  const renderItem = ({ item }) => {
 
     const isMine = item.user === user;
 
-    const prev = messages[index - 1];
+    const opacity = anim[item.id] || new Animated.Value(1);
+    const translateX = trans[item.id] || new Animated.Value(0);
 
-    const newDay =
-      !prev ||
-      formatDate(prev.createdAt) !== formatDate(item.createdAt);
-
-    const animVal = anim[item.id] || new Animated.Value(1);
+    const pan = createPan(item);
 
     return (
 
-      <View>
+      <View style={[
+        styles.row,
+        isMine ? styles.right : styles.left
+      ]}>
 
-        {/* DAY SEPARATOR */}
-        {newDay && (
-          <View style={styles.dayWrap}>
-            <Text style={styles.dayText}>
-              {formatDate(item.createdAt)}
-            </Text>
-          </View>
-        )}
-
-        {/* MESSAGE */}
         <Animated.View
+          {...pan.panHandlers}
           style={[
-            styles.row,
+            styles.bubble,
+            isMine ? styles.me : styles.other,
             {
-              opacity: animVal,
-              transform: [{
-                translateY: animVal.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [20, 0]
-                })
-              }],
-              alignSelf: isMine ? "flex-end" : "flex-start"
+              opacity,
+              transform: [{ translateX }]
             }
           ]}
         >
 
-          <TouchableOpacity
-            onLongPress={() => setSelected(item.id)}
-            onPress={() => setReplyTo(item)}
-            style={[
-              styles.bubble,
-              isMine ? styles.me : styles.other
-            ]}
-          >
+          <Text style={styles.user}>
+            {item.user}
+          </Text>
 
-            {/* REPLY */}
-            {item.replyTo && (
-              <View style={styles.replyBox}>
-                <Text style={styles.replyText}>
-                  ↩ {item.replyTo.text}
-                </Text>
-              </View>
-            )}
-
-            <Text style={styles.user}>{item.user}</Text>
-
-            <Text style={styles.text}>{item.text}</Text>
-
-            {/* REACTIONS */}
-            {item.reactions?.length > 0 && (
-              <View style={styles.reactions}>
-                {item.reactions.map((r, i) => (
-                  <Text key={i} style={styles.react}>
-                    {r}
-                  </Text>
-                ))}
-              </View>
-            )}
-
-            <Text style={styles.time}>
-              {formatTime(item.createdAt)}
+          {item.replyTo && (
+            <Text style={styles.replyText}>
+              ↩ {item.replyTo.text}
             </Text>
-
-          </TouchableOpacity>
-
-          {/* EMOJI BAR */}
-          {selected === item.id && (
-            <View style={styles.emojiBar}>
-
-              {["🔥", "😂", "❤️", "👍", "😮"].map(e => (
-                <TouchableOpacity
-                  key={e}
-                  onPress={() => react(item.id, e)}
-                >
-                  <Text style={styles.emoji}>{e}</Text>
-                </TouchableOpacity>
-              ))}
-
-            </View>
           )}
 
-          {/* DELETE BUTTON */}
-          {item.user === user && selected === item.id && (
-            <TouchableOpacity
-              onPress={() => deleteMessage(item.id, item.user)}
-              style={styles.deleteBtn}
-            >
-              <Text style={{ color: "#fff", fontSize: 12 }}>
-                Cancella
-              </Text>
-            </TouchableOpacity>
-          )}
+          <Text style={styles.text}>
+            {item.text}
+          </Text>
+
+          <Text style={styles.time}>
+            {formatTime(item.createdAt)}
+          </Text>
 
         </Animated.View>
 
@@ -265,12 +231,10 @@ export default function Chat() {
 
     <View style={styles.container}>
 
-      {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.title}>LIVE CHAT</Text>
       </View>
 
-      {/* CHAT */}
       <FlatList
         ref={flatRef}
         data={messages}
@@ -279,7 +243,6 @@ export default function Chat() {
         contentContainerStyle={{ padding: 12 }}
       />
 
-      {/* REPLY PREVIEW */}
       {replyTo && (
         <View style={styles.replyPreview}>
           <Text style={styles.replyPreviewText}>
@@ -288,7 +251,6 @@ export default function Chat() {
         </View>
       )}
 
-      {/* INPUT */}
       <View style={styles.inputRow}>
 
         <TextInput
@@ -316,29 +278,23 @@ const styles = {
     backgroundColor: "#05060a"
   },
 
-  header: {
-    paddingTop: 60,
-    paddingBottom: 10,
-    alignItems: "center"
-  },
-
-  title: {
-    color: "#4dd0ff",
-    fontSize: 18,
-    letterSpacing: 3
-  },
-
   row: {
     marginVertical: 6
   },
 
+  left: {
+    alignItems: "flex-start"
+  },
+
+  right: {
+    alignItems: "flex-end"
+  },
+
   bubble: {
+    maxWidth: "78%",
     padding: 12,
     borderRadius: 14,
-    maxWidth: "78%",
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)"
+    backgroundColor: "rgba(255,255,255,0.05)"
   },
 
   me: {
@@ -367,55 +323,18 @@ const styles = {
     textAlign: "right"
   },
 
-  reactions: {
-    flexDirection: "row",
-    marginTop: 6
-  },
-
-  react: {
-    marginRight: 4
-  },
-
-  emojiBar: {
-    flexDirection: "row",
-    marginLeft: 8
-  },
-
-  emoji: {
-    fontSize: 18,
-    marginHorizontal: 4
-  },
-
-  dayWrap: {
-    alignItems: "center",
-    marginVertical: 10
-  },
-
-  dayText: {
-    color: "#555",
-    fontSize: 12
-  },
-
-  replyBox: {
-    borderLeftWidth: 2,
-    borderLeftColor: "#4dd0ff",
-    paddingLeft: 6,
+  replyText: {
+    color: "#aaa",
+    fontSize: 11,
     marginBottom: 4
   },
 
-  replyText: {
-    color: "#aaa",
-    fontSize: 11
-  },
-
   replyPreview: {
-    paddingLeft: 10,
-    paddingBottom: 5
+    padding: 10
   },
 
   replyPreviewText: {
-    color: "#4dd0ff",
-    fontSize: 12
+    color: "#4dd0ff"
   },
 
   inputRow: {
@@ -440,14 +359,6 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 10
-  },
-
-  deleteBtn: {
-    marginTop: 6,
-    padding: 6,
-    backgroundColor: "#ff3b3b",
-    borderRadius: 8,
-    alignSelf: "flex-start"
   }
 
 };
