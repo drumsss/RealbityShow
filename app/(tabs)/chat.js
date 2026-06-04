@@ -3,11 +3,14 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
+  PanResponder,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
+
+import * as Haptics from "expo-haptics";
 
 import {
   addDoc,
@@ -25,16 +28,19 @@ import { db } from "../../firebase";
 import { getUser } from "../session";
 
 export default function Chat() {
+
   const [msg, setMsg] = useState("");
   const [user, setUser] = useState("");
   const [messages, setMessages] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
 
   const flatRef = useRef();
 
-  // anim refs per messaggi
-  const anims = useRef({}).current;
+  const anim = useRef({}).current;
+  const trans = useRef({}).current;
 
   useEffect(() => {
+
     getUser().then(setUser);
 
     const q = query(
@@ -43,32 +49,15 @@ export default function Chat() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
+
       const data = snap.docs.map(d => ({
         id: d.id,
         ...d.data()
       }));
 
-      // init anim per nuovi messaggi
       data.forEach(m => {
-        if (!anims[m.id]) {
-          anims[m.id] = {
-            opacity: new Animated.Value(0),
-            translateY: new Animated.Value(10)
-          };
-
-          Animated.parallel([
-            Animated.timing(anims[m.id].opacity, {
-              toValue: 1,
-              duration: 220,
-              useNativeDriver: true
-            }),
-            Animated.timing(anims[m.id].translateY, {
-              toValue: 0,
-              duration: 220,
-              useNativeDriver: true
-            })
-          ]).start();
-        }
+        if (!anim[m.id]) anim[m.id] = new Animated.Value(1);
+        if (!trans[m.id]) trans[m.id] = new Animated.Value(0);
       });
 
       setMessages(data);
@@ -76,15 +65,19 @@ export default function Chat() {
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
       }, 120);
+
     });
 
     return unsub;
+
   }, []);
 
   const send = async () => {
+
     if (!msg.trim()) return;
 
     if (msg.trim().toLowerCase() === "/clean") {
+
       const snap = await getDocs(collection(db, "messages"));
 
       await Promise.all(
@@ -100,10 +93,36 @@ export default function Chat() {
     await addDoc(collection(db, "messages"), {
       text: msg,
       user,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      replyTo: replyTo || null
     });
 
     setMsg("");
+    setReplyTo(null);
+  };
+
+  const deleteMessage = (id, owner) => {
+
+    if (owner !== user) return;
+
+    Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success
+    );
+
+    Animated.parallel([
+      Animated.timing(anim[id], {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true
+      }),
+      Animated.timing(trans[id], {
+        toValue: -60,
+        duration: 150,
+        useNativeDriver: true
+      })
+    ]).start(() => {
+      deleteDoc(doc(db, "messages", id));
+    });
   };
 
   const formatTime = (t) => {
@@ -112,100 +131,127 @@ export default function Chat() {
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  // 📅 SEPARATORI DATA
-  const getDayLabel = (current, prev) => {
-    if (!current?.createdAt) return null;
+  const getInitial = (name) =>
+    (name || "?").trim().charAt(0).toUpperCase();
 
-    const c = current.createdAt.toDate?.();
-    const p = prev?.createdAt?.toDate?.();
-
-    if (!c) return null;
-
-    const isSameDay =
-      p &&
-      c.getDate() === p.getDate() &&
-      c.getMonth() === p.getMonth() &&
-      c.getFullYear() === p.getFullYear();
-
-    if (isSameDay) return null;
-
-    const today = new Date();
-
-    const diff =
-      today.getDate() === c.getDate() &&
-      today.getMonth() === c.getMonth() &&
-      today.getFullYear() === c.getFullYear();
-
-    if (diff) return "OGGI";
-
-    const y = new Date();
-    y.setDate(y.getDate() - 1);
-
-    const isYesterday =
-      y.getDate() === c.getDate() &&
-      y.getMonth() === c.getMonth() &&
-      y.getFullYear() === c.getFullYear();
-
-    if (isYesterday) return "IERI";
-
-    return c.toLocaleDateString();
+  const getAvatarColor = (name) => {
+    const colors = ["#4dd0ff", "#ff4d6d", "#ffd166", "#06d6a0", "#a78bfa"];
+    let hash = 0;
+    for (let i = 0; i < (name || "").length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
   };
 
-  const renderItem = ({ item, index }) => {
+  const createPan = (item) => {
+
+    const panResponder = PanResponder.create({
+
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 10,
+
+      onPanResponderMove: (_, g) => {
+        trans[item.id].setValue(g.dx);
+      },
+
+      onPanResponderRelease: (_, g) => {
+
+        if (g.dx < -80) deleteMessage(item.id, item.user);
+
+        Animated.spring(trans[item.id], {
+          toValue: 0,
+          useNativeDriver: true
+        }).start();
+      }
+
+    });
+
+    return panResponder;
+  };
+
+  const renderItem = ({ item }) => {
+
     const isMine = item.user === user;
 
-    const prev = messages[index - 1];
-    const label = getDayLabel(item, prev);
+    const opacity = anim[item.id] || new Animated.Value(1);
+    const translateX = trans[item.id] || new Animated.Value(0);
 
-    const anim = anims[item.id];
+    const pan = createPan(item);
 
     return (
-      <>
-        {label && (
-          <View style={styles.separator}>
-            <Text style={styles.separatorText}>{label}</Text>
-          </View>
-        )}
+
+      <View style={[
+        styles.row,
+        isMine ? styles.right : styles.left
+      ]}>
+
+        {/* AVATAR */}
+        <View style={[
+          styles.avatar,
+          { backgroundColor: getAvatarColor(item.user) }
+        ]}>
+          <Text style={styles.avatarText}>
+            {getInitial(item.user)}
+          </Text>
+        </View>
 
         <Animated.View
+          {...pan.panHandlers}
           style={[
-            styles.row,
-            isMine ? styles.right : styles.left,
-            anim && {
-              opacity: anim.opacity,
-              transform: [{ translateY: anim.translateY }]
+            styles.bubble,
+            isMine ? styles.me : styles.other,
+            {
+              opacity,
+              transform: [{ translateX }]
             }
           ]}
         >
-          <View
-            style={[
-              styles.bubble,
-              isMine ? styles.me : styles.other
-            ]}
-          >
-            <Text style={styles.text}>{item.text}</Text>
 
-            <Text style={styles.time}>
-              {formatTime(item.createdAt)}
+          <Text style={styles.user}>{item.user}</Text>
+
+          {item.replyTo && (
+            <Text style={styles.replyText}>
+              ↩ {item.replyTo.text}
             </Text>
-          </View>
+          )}
+
+          <Text style={styles.text}>{item.text}</Text>
+
+          <Text style={styles.time}>{formatTime(item.createdAt)}</Text>
+
         </Animated.View>
-      </>
+
+      </View>
+
     );
   };
 
   return (
+
     <View style={styles.container}>
+
+      <View style={styles.header}>
+        <Text style={styles.title}>LIVE CHAT</Text>
+      </View>
 
       <FlatList
         ref={flatRef}
         data={messages}
         keyExtractor={i => i.id}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 10 }}
+        contentContainerStyle={{ padding: 12 }}
       />
 
+      {replyTo && (
+        <View style={styles.replyPreview}>
+          <Text style={styles.replyPreviewText}>
+            Rispondi a: {replyTo.text}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.inputRow}>
+
         <TextInput
           value={msg}
           onChangeText={setMsg}
@@ -217,6 +263,7 @@ export default function Chat() {
         <TouchableOpacity onPress={send} style={styles.send}>
           <Text style={{ color: "#000" }}>➤</Text>
         </TouchableOpacity>
+
       </View>
 
     </View>
@@ -225,44 +272,66 @@ export default function Chat() {
 
 const styles = {
 
-  container: {
-    flex: 1,
-    backgroundColor: "#05060a"
+  container: { flex: 1, backgroundColor: "#05060a" },
+
+  header: {
+    paddingTop: 50,
+    paddingBottom: 12,
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)"
+  },
+
+  title: {
+    color: "#4dd0ff",
+    fontSize: 20,
+    fontWeight: "600",
+    letterSpacing: 2
   },
 
   row: {
-    marginVertical: 4
+    flexDirection: "row",
+    marginVertical: 4,
+    alignItems: "flex-end"
   },
 
-  left: { alignItems: "flex-start" },
-  right: { alignItems: "flex-end" },
+  left: { justifyContent: "flex-start" },
+  right: { justifyContent: "flex-end", flexDirection: "row-reverse" },
+
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: 6
+  },
+
+  avatarText: {
+    color: "#000",
+    fontWeight: "900"
+  },
 
   bubble: {
-    maxWidth: "78%",
+    maxWidth: "75%",
     padding: 10,
-    borderRadius: 14,
-    backgroundColor: "rgba(255,255,255,0.05)"
+    borderRadius: 14
   },
 
-  me: {
-    backgroundColor: "rgba(77,208,255,0.12)"
-  },
+  me: { backgroundColor: "rgba(77,208,255,0.15)" },
+  other: { backgroundColor: "rgba(255,255,255,0.06)" },
 
-  other: {
-    backgroundColor: "rgba(255,255,255,0.05)"
-  },
+  user: { color: "#4dd0ff", fontSize: 11, marginBottom: 3 },
 
-  text: {
-    color: "#fff",
-    fontSize: 15
-  },
+  text: { color: "#fff", fontSize: 15 },
 
-  time: {
-    fontSize: 10,
-    color: "#777",
-    marginTop: 4,
-    textAlign: "right"
-  },
+  time: { fontSize: 10, color: "#777", marginTop: 4, textAlign: "right" },
+
+  replyText: { color: "#aaa", fontSize: 11, marginBottom: 4 },
+
+  replyPreview: { padding: 10 },
+
+  replyPreviewText: { color: "#4dd0ff" },
 
   inputRow: {
     flexDirection: "row",
@@ -285,20 +354,6 @@ const styles = {
     backgroundColor: "#4dd0ff",
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: 10
-  },
-
-  separator: {
-    alignItems: "center",
-    marginVertical: 10
-  },
-
-  separatorText: {
-    color: "#888",
-    fontSize: 12,
-    backgroundColor: "#0b0f1a",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
     borderRadius: 10
   }
 };
