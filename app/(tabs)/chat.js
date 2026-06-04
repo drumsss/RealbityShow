@@ -3,14 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   FlatList,
-  Pressable,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
-
-import * as Haptics from "expo-haptics";
 
 import {
   addDoc,
@@ -28,32 +25,16 @@ import { db } from "../../firebase";
 import { getUser } from "../session";
 
 export default function Chat() {
-
   const [msg, setMsg] = useState("");
   const [user, setUser] = useState("");
   const [messages, setMessages] = useState([]);
-  const [replyTo, setReplyTo] = useState(null);
 
   const flatRef = useRef();
 
-  const anim = useRef({}).current;
-  const trans = useRef({}).current;
-
-  // 🎬 LOGO ANIMATION
-  const logoScale = useRef(new Animated.Value(0.6)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoTranslate = useRef(new Animated.Value(-20)).current;
-
-  // ✨ GLOW
-  const logoGlow = useRef(new Animated.Value(0)).current;
-
-  // 📺 GLITCH
-  const glitchX = useRef(new Animated.Value(0)).current;
-  const glitchY = useRef(new Animated.Value(0)).current;
-  const glitchOpacity = useRef(new Animated.Value(1)).current;
+  // anim refs per messaggi
+  const anims = useRef({}).current;
 
   useEffect(() => {
-
     getUser().then(setUser);
 
     const q = query(
@@ -62,20 +43,31 @@ export default function Chat() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-
       const data = snap.docs.map(d => ({
         id: d.id,
         ...d.data()
       }));
 
+      // init anim per nuovi messaggi
       data.forEach(m => {
+        if (!anims[m.id]) {
+          anims[m.id] = {
+            opacity: new Animated.Value(0),
+            translateY: new Animated.Value(10)
+          };
 
-        if (!anim[m.id]) {
-          anim[m.id] = new Animated.Value(1);
-        }
-
-        if (!trans[m.id]) {
-          trans[m.id] = new Animated.Value(0);
+          Animated.parallel([
+            Animated.timing(anims[m.id].opacity, {
+              toValue: 1,
+              duration: 220,
+              useNativeDriver: true
+            }),
+            Animated.timing(anims[m.id].translateY, {
+              toValue: 0,
+              duration: 220,
+              useNativeDriver: true
+            })
+          ]).start();
         }
       });
 
@@ -84,120 +76,15 @@ export default function Chat() {
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
       }, 120);
-
     });
 
-    Animated.sequence([
-
-      Animated.parallel([
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true
-        }),
-        Animated.timing(logoTranslate, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true
-        })
-      ]),
-
-      Animated.timing(logoScale, {
-        toValue: 1.15,
-        duration: 350,
-        useNativeDriver: true
-      }),
-
-      Animated.timing(logoScale, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true
-      })
-
-    ]).start(() => {
-
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(logoGlow, {
-            toValue: 1,
-            duration: 1200,
-            useNativeDriver: false
-          }),
-          Animated.timing(logoGlow, {
-            toValue: 0,
-            duration: 1200,
-            useNativeDriver: false
-          })
-        ])
-      ).start();
-
-    });
-
-    const interval = setInterval(() => {
-
-      if (Math.random() > 0.65) {
-
-        const rx = (Math.random() - 0.5) * 6;
-        const ry = (Math.random() - 0.5) * 6;
-        const flicker = Math.random() > 0.5 ? 0.6 : 1;
-
-        Animated.sequence([
-
-          Animated.parallel([
-            Animated.timing(glitchX, {
-              toValue: rx,
-              duration: 60,
-              useNativeDriver: true
-            }),
-            Animated.timing(glitchY, {
-              toValue: ry,
-              duration: 60,
-              useNativeDriver: true
-            }),
-            Animated.timing(glitchOpacity, {
-              toValue: flicker,
-              duration: 60,
-              useNativeDriver: true
-            })
-          ]),
-
-          Animated.parallel([
-            Animated.timing(glitchX, {
-              toValue: 0,
-              duration: 80,
-              useNativeDriver: true
-            }),
-            Animated.timing(glitchY, {
-              toValue: 0,
-              duration: 80,
-              useNativeDriver: true
-            }),
-            Animated.timing(glitchOpacity, {
-              toValue: 1,
-              duration: 80,
-              useNativeDriver: true
-            })
-          ])
-
-        ]).start();
-      }
-
-    }, 2500);
-
-    return () => {
-      clearInterval(interval);
-      unsub();
-    };
-
+    return unsub;
   }, []);
 
-  // 📩 SEND
   const send = async () => {
-
     if (!msg.trim()) return;
 
     if (msg.trim().toLowerCase() === "/clean") {
-
       const snap = await getDocs(collection(db, "messages"));
 
       await Promise.all(
@@ -207,44 +94,16 @@ export default function Chat() {
       );
 
       setMsg("");
-      setReplyTo(null);
       return;
     }
 
     await addDoc(collection(db, "messages"), {
       text: msg,
       user,
-      createdAt: serverTimestamp(),
-      replyTo: replyTo || null
+      createdAt: serverTimestamp()
     });
 
     setMsg("");
-    setReplyTo(null);
-  };
-
-  // 🗑 DELETE
-  const deleteMessage = (id, owner) => {
-
-    if (owner !== user) return;
-
-    Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Success
-    );
-
-    Animated.parallel([
-      Animated.timing(anim[id], {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true
-      }),
-      Animated.timing(trans[id], {
-        toValue: -90,
-        duration: 180,
-        useNativeDriver: true
-      })
-    ]).start(() => {
-      deleteDoc(doc(db, "messages", id));
-    });
   };
 
   const formatTime = (t) => {
@@ -253,122 +112,100 @@ export default function Chat() {
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  // 👆 CLICK TO REPLY (NUOVO)
-  const onPressMessage = (item) => {
-    setReplyTo(item);
+  // 📅 SEPARATORI DATA
+  const getDayLabel = (current, prev) => {
+    if (!current?.createdAt) return null;
 
-    Haptics.selectionAsync();
+    const c = current.createdAt.toDate?.();
+    const p = prev?.createdAt?.toDate?.();
+
+    if (!c) return null;
+
+    const isSameDay =
+      p &&
+      c.getDate() === p.getDate() &&
+      c.getMonth() === p.getMonth() &&
+      c.getFullYear() === p.getFullYear();
+
+    if (isSameDay) return null;
+
+    const today = new Date();
+
+    const diff =
+      today.getDate() === c.getDate() &&
+      today.getMonth() === c.getMonth() &&
+      today.getFullYear() === c.getFullYear();
+
+    if (diff) return "OGGI";
+
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+
+    const isYesterday =
+      y.getDate() === c.getDate() &&
+      y.getMonth() === c.getMonth() &&
+      y.getFullYear() === c.getFullYear();
+
+    if (isYesterday) return "IERI";
+
+    return c.toLocaleDateString();
   };
 
-  const renderItem = ({ item }) => {
-
+  const renderItem = ({ item, index }) => {
     const isMine = item.user === user;
 
-    const opacity = anim[item.id] || new Animated.Value(1);
-    const translateX = trans[item.id] || new Animated.Value(0);
+    const prev = messages[index - 1];
+    const label = getDayLabel(item, prev);
+
+    const anim = anims[item.id];
 
     return (
-
-      <View style={[
-        styles.row,
-        isMine ? styles.right : styles.left
-      ]}>
+      <>
+        {label && (
+          <View style={styles.separator}>
+            <Text style={styles.separatorText}>{label}</Text>
+          </View>
+        )}
 
         <Animated.View
           style={[
-            styles.bubble,
-            isMine ? styles.me : styles.other,
-            {
-              opacity,
-              transform: [{ translateX }]
+            styles.row,
+            isMine ? styles.right : styles.left,
+            anim && {
+              opacity: anim.opacity,
+              transform: [{ translateY: anim.translateY }]
             }
           ]}
         >
-
-          {/* 👆 TAP PER RISPONDERE */}
-          <Pressable onPress={() => onPressMessage(item)}>
-
-            <Text style={styles.user}>{item.user}</Text>
-
-            {item.replyTo && (
-              <Text style={styles.replyText}>
-                ↩ {item.replyTo.text}
-              </Text>
-            )}
-
+          <View
+            style={[
+              styles.bubble,
+              isMine ? styles.me : styles.other
+            ]}
+          >
             <Text style={styles.text}>{item.text}</Text>
 
             <Text style={styles.time}>
               {formatTime(item.createdAt)}
             </Text>
-
-          </Pressable>
-
+          </View>
         </Animated.View>
-
-      </View>
-
+      </>
     );
   };
 
   return (
-
     <View style={styles.container}>
-
-      {/* HEADER */}
-      <View style={styles.header}>
-
-        <Animated.View
-          style={[
-            styles.logoWrapper,
-            {
-              opacity: logoOpacity,
-              transform: [
-                { translateY: logoTranslate },
-                { scale: logoScale },
-                { translateX: glitchX }
-              ],
-              shadowOpacity: logoGlow.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.2, 0.9]
-              })
-            }
-          ]}
-        >
-
-          <Animated.Image
-            source={require("../../assets/logo_bw.png")}
-            style={[
-              styles.logo,
-              { opacity: glitchOpacity }
-            ]}
-            resizeMode="contain"
-          />
-
-        </Animated.View>
-
-        <Text style={styles.title}>LIVE CHAT</Text>
-
-      </View>
 
       <FlatList
         ref={flatRef}
         data={messages}
         keyExtractor={i => i.id}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 12 }}
+        contentContainerStyle={{ padding: 10 }}
       />
 
-      {replyTo && (
-        <View style={styles.replyPreview}>
-          <Text style={styles.replyPreviewText}>
-            Rispondi a: {replyTo.text}
-          </Text>
-        </View>
-      )}
-
       <View style={styles.inputRow}>
-
         <TextInput
           value={msg}
           onChangeText={setMsg}
@@ -380,7 +217,6 @@ export default function Chat() {
         <TouchableOpacity onPress={send} style={styles.send}>
           <Text style={{ color: "#000" }}>➤</Text>
         </TouchableOpacity>
-
       </View>
 
     </View>
@@ -389,62 +225,44 @@ export default function Chat() {
 
 const styles = {
 
-  container: { flex: 1, backgroundColor: "#05060a" },
-
-  header: {
-    paddingTop: 50,
-    paddingBottom: 12,
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)"
+  container: {
+    flex: 1,
+    backgroundColor: "#05060a"
   },
 
-  logoWrapper: {
-    marginBottom: 6,
-    shadowColor: "#4dd0ff",
-    shadowRadius: 25,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 12
+  row: {
+    marginVertical: 4
   },
-
-  logo: {
-    width: 75,
-    height: 75
-  },
-
-  title: {
-    color: "#4dd0ff",
-    fontSize: 20,
-    fontWeight: "600",
-    letterSpacing: 2
-  },
-
-  row: { marginVertical: 6 },
 
   left: { alignItems: "flex-start" },
   right: { alignItems: "flex-end" },
 
   bubble: {
     maxWidth: "78%",
-    padding: 12,
+    padding: 10,
     borderRadius: 14,
     backgroundColor: "rgba(255,255,255,0.05)"
   },
 
-  me: { backgroundColor: "rgba(77,208,255,0.12)" },
-  other: { backgroundColor: "rgba(255,255,255,0.05)" },
+  me: {
+    backgroundColor: "rgba(77,208,255,0.12)"
+  },
 
-  user: { color: "#4dd0ff", fontSize: 12, marginBottom: 4 },
+  other: {
+    backgroundColor: "rgba(255,255,255,0.05)"
+  },
 
-  text: { color: "#fff", fontSize: 15 },
+  text: {
+    color: "#fff",
+    fontSize: 15
+  },
 
-  time: { fontSize: 10, color: "#777", marginTop: 6, textAlign: "right" },
-
-  replyText: { color: "#aaa", fontSize: 11, marginBottom: 4 },
-
-  replyPreview: { padding: 10 },
-
-  replyPreviewText: { color: "#4dd0ff" },
+  time: {
+    fontSize: 10,
+    color: "#777",
+    marginTop: 4,
+    textAlign: "right"
+  },
 
   inputRow: {
     flexDirection: "row",
@@ -468,6 +286,19 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     borderRadius: 10
-  }
+  },
 
+  separator: {
+    alignItems: "center",
+    marginVertical: 10
+  },
+
+  separatorText: {
+    color: "#888",
+    fontSize: 12,
+    backgroundColor: "#0b0f1a",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10
+  }
 };
