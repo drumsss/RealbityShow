@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  Alert,
-  Animated,
-  Clipboard,
   FlatList,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
-
-import * as Haptics from "expo-haptics";
 
 import {
   addDoc,
@@ -36,7 +31,6 @@ export default function Chat() {
   const [replyTo, setReplyTo] = useState(null);
 
   const flatRef = useRef();
-  const anim = useRef({}).current;
 
   useEffect(() => {
 
@@ -49,16 +43,12 @@ export default function Chat() {
 
     const unsub = onSnapshot(q, (snap) => {
 
-      const data = snap.docs.map(d => ({
-        id: d.id,
-        ...d.data()
-      }));
-
-      data.forEach(m => {
-        if (!anim[m.id]) anim[m.id] = new Animated.Value(1);
-      });
-
-      setMessages(data);
+      setMessages(
+        snap.docs.map(d => ({
+          id: d.id,
+          ...d.data()
+        }))
+      );
 
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
@@ -99,61 +89,6 @@ export default function Chat() {
     setReplyTo(null);
   };
 
-  const deleteMessage = async (item) => {
-
-    if (item.user !== user) return;
-
-    Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Success
-    );
-
-    Animated.timing(anim[item.id], {
-      toValue: 0,
-      duration: 150,
-      useNativeDriver: true
-    }).start(async () => {
-      await deleteDoc(doc(db, "messages", item.id));
-    });
-  };
-
-  const copyText = async (text) => {
-    await Clipboard.setStringAsync(text);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  const openMenu = (item) => {
-
-    const isMine = item.user === user;
-
-    Alert.alert(
-      "Messaggio",
-      "",
-      [
-        {
-          text: "Rispondi",
-          onPress: () => setReplyTo(item)
-        },
-
-        {
-          text: "Copia testo",
-          onPress: () => copyText(item.text)
-        },
-
-        isMine && {
-          text: "Elimina",
-          style: "destructive",
-          onPress: () => deleteMessage(item)
-        },
-
-        {
-          text: "Annulla",
-          style: "cancel"
-        }
-
-      ].filter(Boolean)
-    );
-  };
-
   const formatTime = (t) => {
     if (!t?.toDate) return "";
     const d = t.toDate();
@@ -178,8 +113,6 @@ export default function Chat() {
 
     const isMine = item.user === user;
 
-    const opacity = anim[item.id] || new Animated.Value(1);
-
     return (
 
       <View style={[
@@ -187,29 +120,30 @@ export default function Chat() {
         isMine ? styles.right : styles.left
       ]}>
 
-        <View style={[
-          styles.avatar,
-          { backgroundColor: getAvatarColor(item.user) }
-        ]}>
-          <Text style={styles.avatarText}>
-            {getInitial(item.user)}
-          </Text>
-        </View>
+        {!isMine && (
+          <View style={[
+            styles.avatar,
+            { backgroundColor: getAvatarColor(item.user) }
+          ]}>
+            <Text style={styles.avatarText}>
+              {getInitial(item.user)}
+            </Text>
+          </View>
+        )}
 
         <TouchableOpacity
           activeOpacity={0.8}
-          onLongPress={() => openMenu(item)}
+          onPress={() => setReplyTo(item)}
         >
 
-          <Animated.View
-            style={[
-              styles.bubble,
-              isMine ? styles.me : styles.other,
-              { opacity }
-            ]}
-          >
+          <View style={[
+            styles.bubble,
+            isMine ? styles.me : styles.other
+          ]}>
 
-            <Text style={styles.user}>{item.user}</Text>
+            {!isMine && (
+              <Text style={styles.user}>{item.user}</Text>
+            )}
 
             {item.replyTo && (
               <Text style={styles.replyText}>
@@ -217,15 +151,28 @@ export default function Chat() {
               </Text>
             )}
 
-            <Text style={styles.text}>{item.text}</Text>
+            <Text style={styles.text}>
+              {item.text}
+            </Text>
 
             <Text style={styles.time}>
               {formatTime(item.createdAt)}
             </Text>
 
-          </Animated.View>
+          </View>
 
         </TouchableOpacity>
+
+        {isMine && (
+          <View style={[
+            styles.avatar,
+            { backgroundColor: getAvatarColor(item.user) }
+          ]}>
+            <Text style={styles.avatarText}>
+              {getInitial(item.user)}
+            </Text>
+          </View>
+        )}
 
       </View>
     );
@@ -263,6 +210,7 @@ export default function Chat() {
           style={styles.input}
           placeholder="Scrivi..."
           placeholderTextColor="#666"
+          multiline={false}
         />
 
         <TouchableOpacity onPress={send} style={styles.send}>
@@ -296,7 +244,7 @@ const styles = {
 
   row: {
     flexDirection: "row",
-    marginVertical: 5,
+    marginVertical: 4,
     alignItems: "flex-end"
   },
 
@@ -304,9 +252,9 @@ const styles = {
   right: { justifyContent: "flex-end", flexDirection: "row-reverse" },
 
   avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: "center",
     alignItems: "center",
     marginHorizontal: 6
@@ -314,7 +262,8 @@ const styles = {
 
   avatarText: {
     color: "#000",
-    fontWeight: "900"
+    fontWeight: "900",
+    fontSize: 12
   },
 
   bubble: {
@@ -328,15 +277,32 @@ const styles = {
 
   user: { color: "#4dd0ff", fontSize: 11, marginBottom: 3 },
 
-  text: { color: "#fff", fontSize: 15 },
+  text: {
+    color: "#fff",
+    fontSize: 15,
+    flexWrap: "wrap"
+  },
 
-  time: { fontSize: 10, color: "#777", marginTop: 4, textAlign: "right" },
+  time: {
+    fontSize: 10,
+    color: "#777",
+    marginTop: 4,
+    textAlign: "right"
+  },
 
-  replyText: { color: "#aaa", fontSize: 11, marginBottom: 4 },
+  replyText: {
+    color: "#aaa",
+    fontSize: 11,
+    marginBottom: 4
+  },
 
-  replyPreview: { padding: 10 },
+  replyPreview: {
+    padding: 10
+  },
 
-  replyPreviewText: { color: "#4dd0ff" },
+  replyPreviewText: {
+    color: "#4dd0ff"
+  },
 
   inputRow: {
     flexDirection: "row",
