@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-
 import {
+  Animated,
   FlatList,
+  Image,
   Text,
   TextInput,
   TouchableOpacity,
@@ -32,6 +33,11 @@ export default function Chat() {
 
   const flatRef = useRef();
 
+  // 🎬 LOGO ANIMAZIONE INGRESSO
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const logoTranslate = useRef(new Animated.Value(-15)).current;
+  const logoScale = useRef(new Animated.Value(0.85)).current;
+
   useEffect(() => {
 
     getUser().then(setUser);
@@ -43,18 +49,37 @@ export default function Chat() {
 
     const unsub = onSnapshot(q, (snap) => {
 
-      setMessages(
-        snap.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        }))
-      );
+      const data = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }));
+
+      setMessages(data);
 
       setTimeout(() => {
         flatRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      }, 80);
 
     });
+
+    // 🎬 ANIMAZIONE LOGO
+    Animated.parallel([
+      Animated.timing(logoOpacity, {
+        toValue: 1,
+        duration: 450,
+        useNativeDriver: true
+      }),
+      Animated.timing(logoTranslate, {
+        toValue: 0,
+        duration: 450,
+        useNativeDriver: true
+      }),
+      Animated.timing(logoScale, {
+        toValue: 1,
+        duration: 450,
+        useNativeDriver: true
+      })
+    ]).start();
 
     return unsub;
 
@@ -95,45 +120,20 @@ export default function Chat() {
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  const getInitial = (name) =>
-    (name || "?").trim().charAt(0).toUpperCase();
-
-  const getAvatarColor = (name) => {
-    const colors = ["#4dd0ff", "#ff4d6d", "#ffd166", "#06d6a0", "#a78bfa"];
-    let hash = 0;
-
-    for (let i = 0; i < (name || "").length; i++) {
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    }
-
-    return colors[Math.abs(hash) % colors.length];
-  };
-
   const renderItem = ({ item }) => {
 
     const isMine = item.user === user;
 
     return (
-
       <View style={[
         styles.row,
         isMine ? styles.right : styles.left
       ]}>
 
-        {!isMine && (
-          <View style={[
-            styles.avatar,
-            { backgroundColor: getAvatarColor(item.user) }
-          ]}>
-            <Text style={styles.avatarText}>
-              {getInitial(item.user)}
-            </Text>
-          </View>
-        )}
-
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={0.85}
           onPress={() => setReplyTo(item)}
+          style={styles.bubbleWrapper}
         >
 
           <View style={[
@@ -141,12 +141,12 @@ export default function Chat() {
             isMine ? styles.me : styles.other
           ]}>
 
-            {!isMine && (
-              <Text style={styles.user}>{item.user}</Text>
-            )}
+            <Text style={styles.user}>
+              {item.user}
+            </Text>
 
             {item.replyTo && (
-              <Text style={styles.replyText}>
+              <Text style={styles.reply}>
                 ↩ {item.replyTo.text}
               </Text>
             )}
@@ -163,17 +163,6 @@ export default function Chat() {
 
         </TouchableOpacity>
 
-        {isMine && (
-          <View style={[
-            styles.avatar,
-            { backgroundColor: getAvatarColor(item.user) }
-          ]}>
-            <Text style={styles.avatarText}>
-              {getInitial(item.user)}
-            </Text>
-          </View>
-        )}
-
       </View>
     );
   };
@@ -182,6 +171,26 @@ export default function Chat() {
 
     <View style={styles.container}>
 
+      {/* HEADER LOGO */}
+      <Animated.View
+        style={[
+          styles.logoBox,
+          {
+            opacity: logoOpacity,
+            transform: [
+              { translateY: logoTranslate },
+              { scale: logoScale }
+            ]
+          }
+        ]}
+      >
+        <Image
+          source={require("../../assets/logo_bw.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </Animated.View>
+
       <View style={styles.header}>
         <Text style={styles.title}>LIVE CHAT</Text>
       </View>
@@ -189,14 +198,17 @@ export default function Chat() {
       <FlatList
         ref={flatRef}
         data={messages}
-        keyExtractor={i => i.id}
+        keyExtractor={(i) => i.id}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 12 }}
+        contentContainerStyle={{
+          padding: 10,
+          paddingBottom: 20
+        }}
       />
 
       {replyTo && (
-        <View style={styles.replyPreview}>
-          <Text style={styles.replyPreviewText}>
+        <View style={styles.replyBox}>
+          <Text style={styles.replyText}>
             Rispondi a: {replyTo.text}
           </Text>
         </View>
@@ -210,7 +222,6 @@ export default function Chat() {
           style={styles.input}
           placeholder="Scrivi..."
           placeholderTextColor="#666"
-          multiline={false}
         />
 
         <TouchableOpacity onPress={send} style={styles.send}>
@@ -225,62 +236,81 @@ export default function Chat() {
 
 const styles = {
 
-  container: { flex: 1, backgroundColor: "#05060a" },
+  container: {
+    flex: 1,
+    backgroundColor: "#05060a"
+  },
+
+  logoBox: {
+    alignItems: "center",
+    marginTop: 35,
+    marginBottom: 5
+  },
+
+  logo: {
+    width: 55,
+    height: 55
+  },
 
   header: {
-    paddingTop: 50,
-    paddingBottom: 12,
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)"
+    marginBottom: 5
   },
 
   title: {
     color: "#4dd0ff",
-    fontSize: 20,
-    fontWeight: "600",
-    letterSpacing: 2
+    fontSize: 18,
+    fontWeight: "700"
   },
 
   row: {
+    width: "100%",
     flexDirection: "row",
-    marginVertical: 4,
-    alignItems: "flex-end"
+    marginVertical: 3
   },
 
-  left: { justifyContent: "flex-start" },
-  right: { justifyContent: "flex-end", flexDirection: "row-reverse" },
-
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 6
+  left: {
+    justifyContent: "flex-start"
   },
 
-  avatarText: {
-    color: "#000",
-    fontWeight: "900",
-    fontSize: 12
+  right: {
+    justifyContent: "flex-end"
+  },
+
+  bubbleWrapper: {
+    maxWidth: "80%"
   },
 
   bubble: {
-    maxWidth: "75%",
     padding: 10,
-    borderRadius: 14
+    borderRadius: 14,
+    minWidth: 40
   },
 
-  me: { backgroundColor: "rgba(77,208,255,0.15)" },
-  other: { backgroundColor: "rgba(255,255,255,0.06)" },
+  me: {
+    backgroundColor: "rgba(77,208,255,0.18)",
+    alignSelf: "flex-end"
+  },
 
-  user: { color: "#4dd0ff", fontSize: 11, marginBottom: 3 },
+  other: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    alignSelf: "flex-start"
+  },
+
+  user: {
+    color: "#4dd0ff",
+    fontSize: 11,
+    marginBottom: 3
+  },
 
   text: {
     color: "#fff",
     fontSize: 15,
-    flexWrap: "wrap"
+    lineHeight: 20,
+    flexShrink: 1,
+    flexWrap: "wrap",
+    includeFontPadding: false,
+    textBreakStrategy: "simple"
   },
 
   time: {
@@ -290,17 +320,18 @@ const styles = {
     textAlign: "right"
   },
 
-  replyText: {
+  reply: {
     color: "#aaa",
     fontSize: 11,
     marginBottom: 4
   },
 
-  replyPreview: {
-    padding: 10
+  replyBox: {
+    padding: 8,
+    backgroundColor: "#0b0f1a"
   },
 
-  replyPreviewText: {
+  replyText: {
     color: "#4dd0ff"
   },
 
