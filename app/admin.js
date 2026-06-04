@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  Animated,
+  Easing,
+  Image,
   ScrollView,
   Text,
   TextInput,
@@ -31,7 +34,49 @@ export default function Admin() {
 
   const challengeRef = doc(db, "challenge", "current");
 
+  // 🔥 animazioni ingresso
+  const fade = useState(new Animated.Value(0))[0];
+  const scale = useState(new Animated.Value(1.1))[0];
+  const translateY = useState(new Animated.Value(20))[0];
+  const glitch = useState(new Animated.Value(0))[0];
+
   useEffect(() => {
+
+    Animated.parallel([
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true
+      }),
+      Animated.timing(scale, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 600,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true
+      })
+    ]).start();
+
+    // glitch leggero random
+    const interval = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(glitch, {
+          toValue: 1,
+          duration: 60,
+          useNativeDriver: true
+        }),
+        Animated.timing(glitch, {
+          toValue: 0,
+          duration: 80,
+          useNativeDriver: true
+        })
+      ]).start();
+    }, 3000);
 
     const check = async () => {
       const u = await getUser();
@@ -43,9 +88,10 @@ export default function Admin() {
 
     check();
 
+    return () => clearInterval(interval);
+
   }, []);
 
-  // 🔥 TEAM FIXO
   const getTeam = (name) => {
 
     const n = name.toLowerCase().trim();
@@ -62,7 +108,6 @@ export default function Admin() {
   const playerRef = (name) =>
     doc(db, "players", name.toLowerCase().trim());
 
-  // ➕ ADD POINTS
   const addPoints = async () => {
 
     if (!playerName || !points) return;
@@ -76,27 +121,16 @@ export default function Admin() {
     let team = getTeam(name);
 
     if (!snap.exists()) {
-
-      await setDoc(ref, {
-        name,
-        team,
-        points: 0
-      });
+      await setDoc(ref, { name, team, points: 0 });
     }
 
-    await updateDoc(ref, {
-      points: increment(pts)
-    });
-
-    await updateDoc(doc(db, "teams", team), {
-      totalPoints: increment(pts)
-    });
+    await updateDoc(ref, { points: increment(pts) });
+    await updateDoc(doc(db, "teams", team), { totalPoints: increment(pts) });
 
     setPlayerName("");
     setPoints("");
   };
 
-  // ➖ REMOVE POINTS
   const removePoints = async () => {
 
     if (!playerName || !points) return;
@@ -110,38 +144,27 @@ export default function Admin() {
     if (!snap.exists()) return;
 
     const data = snap.data();
-
     const team = data.team || getTeam(name);
 
-    await updateDoc(ref, {
-      points: increment(-pts)
-    });
-
-    await updateDoc(doc(db, "teams", team), {
-      totalPoints: increment(-pts)
-    });
+    await updateDoc(ref, { points: increment(-pts) });
+    await updateDoc(doc(db, "teams", team), { totalPoints: increment(-pts) });
 
     setPlayerName("");
     setPoints("");
   };
 
-  // 📅 SFIDE
   const updateChallenge = async () => {
 
     if (!day || !challenge) return;
 
-    await setDoc(
-      doc(db, "calendar", day.toLowerCase().trim()),
-      {
-        title: challenge
-      }
-    );
+    await setDoc(doc(db, "calendar", day.toLowerCase().trim()), {
+      title: challenge
+    });
 
     setDay("");
     setChallenge("");
   };
 
-  // ⏱ TIMER
   const startTimer = async () => {
 
     const min = parseInt(minutes);
@@ -157,26 +180,57 @@ export default function Admin() {
   };
 
   const stopTimer = async () => {
-
-    await updateDoc(challengeRef, {
-      active: false
-    });
-
+    await updateDoc(challengeRef, { active: false });
   };
 
   const resetTimer = async () => {
-
     await setDoc(challengeRef, {
       active: false,
       endTime: 0,
       duration: 0
     });
+  };
 
+  const glitchStyle = {
+    transform: [
+      {
+        translateX: glitch.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, 2]
+        })
+      },
+      {
+        translateY: glitch.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -1]
+        })
+      }
+    ]
   };
 
   return (
 
-    <View style={styles.container}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: fade,
+          transform: [
+            { scale },
+            { translateY }
+          ]
+        }
+      ]}
+    >
+
+      {/* LOGO INTRO */}
+      <Animated.View style={[styles.logoWrap, glitchStyle]}>
+        <Image
+          source={require("../assets/logo_bw.png")}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+      </Animated.View>
 
       <TouchableOpacity
         onPress={() => router.back()}
@@ -275,32 +329,27 @@ export default function Admin() {
             style={styles.input}
           />
 
-          <TouchableOpacity
-            onPress={startTimer}
-            style={styles.greenFullBtn}
-          >
-            <Text style={styles.darkBtnText}>START</Text>
-          </TouchableOpacity>
+          <View style={styles.timerRow}>
 
-          <TouchableOpacity
-            onPress={stopTimer}
-            style={styles.redFullBtn}
-          >
-            <Text style={styles.btnText}>STOP</Text>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={startTimer} style={styles.smallGreen}>
+              <Text style={styles.btnText}>START</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={resetTimer}
-            style={styles.orangeFullBtn}
-          >
-            <Text style={styles.darkBtnText}>RESET</Text>
-          </TouchableOpacity>
+            <TouchableOpacity onPress={stopTimer} style={styles.smallRed}>
+              <Text style={styles.btnText}>STOP</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={resetTimer} style={styles.smallOrange}>
+              <Text style={styles.btnText}>RESET</Text>
+            </TouchableOpacity>
+
+          </View>
 
         </View>
 
       </ScrollView>
 
-    </View>
+    </Animated.View>
   );
 }
 
@@ -309,6 +358,18 @@ const styles = {
   container: {
     flex: 1,
     backgroundColor: "#000"
+  },
+
+  logoWrap: {
+    alignItems: "center",
+    marginTop: 25,
+    marginBottom: 5
+  },
+
+  logo: {
+    width: 75,
+    height: 75,
+    opacity: 0.95
   },
 
   backBtn: {
@@ -327,16 +388,18 @@ const styles = {
     color: "#ffd700",
     fontSize: 28,
     textAlign: "center",
-    marginTop: 60,
+    marginTop: 10,
     marginBottom: 10,
     fontWeight: "bold"
   },
 
   card: {
-    backgroundColor: "#111",
+    backgroundColor: "#0d0d0d",
     margin: 15,
     padding: 15,
-    borderRadius: 15
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#222"
   },
 
   section: {
@@ -350,7 +413,9 @@ const styles = {
     color: "#fff",
     padding: 10,
     borderRadius: 10,
-    marginBottom: 10
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#222"
   },
 
   greenBtn: {
@@ -375,27 +440,6 @@ const styles = {
     marginTop: 10
   },
 
-  greenFullBtn: {
-    backgroundColor: "#00cc66",
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 10
-  },
-
-  redFullBtn: {
-    backgroundColor: "#ff0033",
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 10
-  },
-
-  orangeFullBtn: {
-    backgroundColor: "#ff8800",
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 10
-  },
-
   btnText: {
     color: "#fff",
     textAlign: "center",
@@ -406,5 +450,35 @@ const styles = {
     color: "#000",
     textAlign: "center",
     fontWeight: "bold"
+  },
+
+  timerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 10
+  },
+
+  smallGreen: {
+    flex: 1,
+    backgroundColor: "#00cc66",
+    padding: 10,
+    borderRadius: 10,
+    marginRight: 5
+  },
+
+  smallRed: {
+    flex: 1,
+    backgroundColor: "#ff0033",
+    padding: 10,
+    borderRadius: 10,
+    marginRight: 5
+  },
+
+  smallOrange: {
+    flex: 1,
+    backgroundColor: "#ff8800",
+    padding: 10,
+    borderRadius: 10
   }
+
 };
