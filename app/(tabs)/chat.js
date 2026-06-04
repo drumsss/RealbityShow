@@ -22,7 +22,11 @@ import {
 
 import { Audio } from "expo-av";
 
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytes
+} from "firebase/storage";
 
 import { db, storage } from "../../firebase";
 import { getUser } from "../session";
@@ -128,6 +132,7 @@ export default function Chat() {
       await recording.stopAndUnloadAsync();
 
       const uri = recording.getURI();
+
       const status = await recording.getStatusAsync();
 
       const duration = Math.floor(
@@ -136,16 +141,18 @@ export default function Chat() {
 
       setRecording(null);
 
-      // 🔥 FIX: blob corretto per Firebase
+      // 🔥 FIX STABILE EXPO: arrayBuffer invece di blob/fileSystem
       const response = await fetch(uri);
-      const blob = await response.blob();
+      const arrayBuffer = await response.arrayBuffer();
 
       const fileRef = ref(
         storage,
         `audio/${Date.now()}.m4a`
       );
 
-      await uploadBytes(fileRef, blob);
+      await uploadBytes(fileRef, arrayBuffer, {
+        contentType: "audio/m4a"
+      });
 
       const downloadURL = await getDownloadURL(fileRef);
 
