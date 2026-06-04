@@ -21,7 +21,6 @@ import {
 } from "firebase/firestore";
 
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
 
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
@@ -107,7 +106,7 @@ export default function Chat() {
       const rec = new Audio.Recording();
 
       await rec.prepareToRecordAsync(
-        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
 
       await rec.startAsync();
@@ -131,21 +130,22 @@ export default function Chat() {
       const uri = recording.getURI();
       const status = await recording.getStatusAsync();
 
-      const duration =
-        Math.floor(status.durationMillis / 1000) || 0;
+      const duration = Math.floor(
+        (status?.durationMillis || 0) / 1000
+      );
 
       setRecording(null);
 
-      // 🔥 LEGGE FILE IN BASE64 (NO BUG EXPO)
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64
-      });
+      // 🔥 FIX: blob corretto per Firebase
+      const response = await fetch(uri);
+      const blob = await response.blob();
 
-      const fileRef = ref(storage, `audio/${Date.now()}.m4a`);
+      const fileRef = ref(
+        storage,
+        `audio/${Date.now()}.m4a`
+      );
 
-      await uploadBytes(fileRef, base64, {
-        contentType: "audio/m4a"
-      });
+      await uploadBytes(fileRef, blob);
 
       const downloadURL = await getDownloadURL(fileRef);
 
@@ -317,7 +317,10 @@ export default function Chat() {
 
         <TouchableOpacity
           onPress={recording ? stopRecording : startRecording}
-          style={[styles.mic, { backgroundColor: recording ? "#ff2b2b" : "#ffd700" }]}
+          style={[
+            styles.mic,
+            { backgroundColor: recording ? "#ff2b2b" : "#ffd700" }
+          ]}
         >
           <Text>{recording ? "■" : "🎤"}</Text>
         </TouchableOpacity>
