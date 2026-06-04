@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
+  Animated,
   FlatList,
+  PanResponder,
   Text,
   TextInput,
   TouchableOpacity,
@@ -11,24 +13,16 @@ import {
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
-  getDocs,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp
+  serverTimestamp,
+  setDoc,
+  updateDoc
 } from "firebase/firestore";
 
-import { Audio } from "expo-av";
-
-import {
-  getDownloadURL,
-  ref,
-  uploadBytes
-} from "firebase/storage";
-
-import { db, storage } from "../../firebase";
+import { db } from "../../firebase";
 import { getUser } from "../session";
 
 export default function Chat() {
@@ -36,11 +30,12 @@ export default function Chat() {
   const [msg, setMsg] = useState("");
   const [user, setUser] = useState("");
   const [messages, setMessages] = useState([]);
+  const [replyTo, setReplyTo] = useState(null);
+  const [typingUsers, setTypingUsers] = useState([]);
 
-  const [recording, setRecording] = useState(null);
-  const [playingId, setPlayingId] = useState(null);
+  const flatRef = useRef();
 
-  const soundRef = useRef(null);
+  const animValues = useRef({}).current;
 
   useEffect(() => {
 
@@ -52,163 +47,119 @@ export default function Chat() {
     );
 
     const unsub = onSnapshot(q, (snap) => {
-      setMessages(
-        snap.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        }))
-      );
+
+      const data = snap.docs.map(d => ({
+        id: d.id,
+        ...d.data()
+      }));
+
+      data.forEach(m => {
+        if (!animValues[m.id]) {
+          animValues[m.id] = new Animated.Value(0);
+
+          Animated.spring(animValues[m.id], {
+            toValue: 1,
+            friction: 7,
+            useNativeDriver: true
+          }).start();
+        }
+      });
+
+      setMessages(data);
+
+      setTimeout(() => {
+        flatRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     });
 
-    return unsub;
+    // typing realtime
+    const typingRef = collection(db, "typing");
 
-  }, []);
+    const unsubTyping = onSnapshot(typingRef, (snap) => {
+      const usersTyping = snap.docs.map(d => d.data().user)
+        .filter(u => u !== user);
 
-  // 📩 TEXT MESSAGE
+      setTypingUsers(usersTyping);
+    });
+
+    return () => {
+      unsub();
+      unsubTyping();
+    };
+
+  }, [user]);
+
+  // 📩 SEND
   const send = async () => {
 
     if (!msg.trim()) return;
 
-    if (msg.trim().toLowerCase() === "/clean") {
-
-      const snap = await getDocs(collection(db, "messages"));
-
-      await Promise.all(
-        snap.docs.map(d =>
-          deleteDoc(doc(db, "messages", d.id))
-        )
-      );
-
-      setMsg("");
-      return;
-    }
-
     await addDoc(collection(db, "messages"), {
       text: msg,
       user,
-      type: "text",
-      createdAt: serverTimestamp()
+      replyTo: replyTo || null,
+      status: "sent",
+      createdAt: serverTimestamp(),
+      reactions: []
     });
 
     setMsg("");
+    setReplyTo(null);
+
+    // typing stop
+    await setDoc(doc(db, "typing", user), {
+      user,
+      typing: false
+    });
   };
 
-  // 🎤 START RECORDING
-  const startRecording = async () => {
+  // ✍️ typing update
+  const handleTyping = async (text) => {
 
-    try {
+    setMsg(text);
 
-      const perm = await Audio.requestPermissionsAsync();
-      if (!perm.granted) return;
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true
-      });
-
-      const rec = new Audio.Recording();
-
-      await rec.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-
-      await rec.startAsync();
-
-      setRecording(rec);
-
-    } catch (e) {
-      console.log("START REC ERROR", e);
-    }
+    await setDoc(doc(db, "typing", user), {
+      user,
+      typing: text.length > 0
+    });
   };
 
-  // 🛑 STOP + UPLOAD (FIX DEFINITIVO)
-  const stopRecording = async () => {
+  // 😂 reaction
+  const addReaction = async (id, emoji) => {
 
-    try {
+    const refMsg = doc(db, "messages", id);
 
-      if (!recording) return;
+    const snap = messages.find(m => m.id === id);
 
-      await recording.stopAndUnloadAsync();
-
-      const uri = recording.getURI();
-      const status = await recording.getStatusAsync();
-
-      const duration = Math.floor(
-        (status?.durationMillis || 0) / 1000
-      );
-
-      setRecording(null);
-
-      // 🔥 FETCH FILE → BLOB (metodo stabile Expo)
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      const fileRef = ref(
-        storage,
-        `audio/${Date.now()}.m4a`
-      );
-
-      await uploadBytes(fileRef, blob, {
-        contentType: "audio/m4a"
-      });
-
-      const downloadURL = await getDownloadURL(fileRef);
-
-      await addDoc(collection(db, "messages"), {
-        audio: downloadURL,
-        duration,
-        type: "audio",
-        user,
-        createdAt: serverTimestamp()
-      });
-
-    } catch (e) {
-      console.log("UPLOAD ERROR", e);
-    }
+    await updateDoc(refMsg, {
+      reactions: [...(snap.reactions || []), emoji]
+    });
   };
 
-  // ▶ PLAY / PAUSE (WHATSAPP STYLE)
-  const playAudio = async (uri, id) => {
+  // 📩 swipe gesture (reply)
+  const createPanResponder = (item) => {
 
-    try {
+    let dx = 0;
 
-      if (soundRef.current && playingId === id) {
+    return PanResponder.create({
 
-        const status = await soundRef.current.getStatusAsync();
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20,
 
-        if (status.isPlaying) {
-          await soundRef.current.pauseAsync();
-        } else {
-          await soundRef.current.playAsync();
+      onPanResponderMove: (_, g) => {
+        dx = g.dx;
+      },
+
+      onPanResponderRelease: () => {
+
+        if (dx > 80) {
+          setReplyTo(item);
         }
 
-        return;
+        dx = 0;
       }
-
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-      }
-
-      const { sound } =
-        await Audio.Sound.createAsync({ uri });
-
-      soundRef.current = sound;
-      setPlayingId(id);
-
-      sound.setOnPlaybackStatusUpdate(status => {
-        if (status.didJustFinish) {
-          setPlayingId(null);
-        }
-      });
-
-      await sound.playAsync();
-
-    } catch (e) {
-      console.log("PLAY ERROR", e);
-    }
+    });
   };
 
-  // ⏱ TIME FORMAT
   const formatTime = (t) => {
 
     if (!t?.toDate) return "";
@@ -218,115 +169,147 @@ export default function Chat() {
     return `${d.getHours()}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
-  const formatDuration = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, "0")}`;
+  const formatDate = (t) => {
+
+    if (!t?.toDate) return "";
+
+    const d = t.toDate();
+
+    return d.toDateString();
   };
 
-  const getNameColor = (name) => {
+  const renderItem = ({ item, index }) => {
 
-    const blue = ["drums", "chiara", "taddei", "licari"];
-    const purple = ["ludo", "mimmo", "eli", "draane"];
+    const isMine = item.user === user;
 
-    const n = name?.toLowerCase();
+    const prev = messages[index - 1];
 
-    if (blue.includes(n)) return "#00bfff";
-    if (purple.includes(n)) return "#b266ff";
+    const newDay =
+      !prev ||
+      formatDate(prev.createdAt) !== formatDate(item.createdAt);
 
-    return "#ffd700";
+    const anim = animValues[item.id] || new Animated.Value(1);
+
+    const pan = createPanResponder(item);
+
+    return (
+
+      <View>
+
+        {/* DAY */}
+        {newDay && (
+          <View style={styles.dayWrap}>
+            <Text style={styles.day}>{formatDate(item.createdAt)}</Text>
+          </View>
+        )}
+
+        <Animated.View
+          {...pan.panHandlers}
+          style={[
+            styles.row,
+            {
+              opacity: anim,
+              transform: [{
+                translateY: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [20, 0]
+                })
+              }]
+            }
+          ]}
+        >
+
+          <TouchableOpacity
+            onLongPress={() => addReaction(item.id, "🔥")}
+            onPress={() => setReplyTo(item)}
+            style={[
+              styles.bubble,
+              isMine ? styles.me : styles.other
+            ]}
+          >
+
+            {/* reply preview */}
+            {item.replyTo && (
+              <View style={styles.replyBox}>
+                <Text style={styles.replyText}>
+                  ↩ {item.replyTo.text}
+                </Text>
+              </View>
+            )}
+
+            <Text style={styles.text}>
+              {item.text}
+            </Text>
+
+            {/* reactions */}
+            {item.reactions?.length > 0 && (
+              <View style={styles.reactions}>
+                {item.reactions.map((r, i) => (
+                  <Text key={i}>{r}</Text>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.time}>
+              {formatTime(item.createdAt)}
+            </Text>
+
+          </TouchableOpacity>
+
+        </Animated.View>
+
+      </View>
+
+    );
   };
 
   return (
 
     <View style={styles.container}>
 
+      {/* header */}
       <View style={styles.header}>
         <Text style={styles.title}>LIVE CHAT</Text>
       </View>
 
+      {/* typing */}
+      {typingUsers.length > 0 && (
+        <Text style={styles.typing}>
+          {typingUsers.join(", ")} sta scrivendo...
+        </Text>
+      )}
+
+      {/* chat */}
       <FlatList
+        ref={flatRef}
         data={messages}
         keyExtractor={i => i.id}
-        contentContainerStyle={{ padding: 10 }}
-        renderItem={({ item }) => {
-
-          const isMine = item.user === user;
-
-          return (
-
-            <View style={[
-              styles.row,
-              { justifyContent: isMine ? "flex-end" : "flex-start" }
-            ]}>
-
-              <View style={[
-                styles.bubble,
-                isMine ? styles.me : styles.other
-              ]}>
-
-                <Text style={[styles.user, { color: getNameColor(item.user) }]}>
-                  {item.user}
-                </Text>
-
-                {item.type === "audio" ? (
-
-                  <TouchableOpacity
-                    onPress={() => playAudio(item.audio, item.id)}
-                    style={styles.audioBox}
-                  >
-
-                    <Text style={styles.play}>
-                      {playingId === item.id ? "❚❚" : "▶"}
-                    </Text>
-
-                    <Text style={styles.duration}>
-                      {formatDuration(item.duration || 0)}
-                    </Text>
-
-                  </TouchableOpacity>
-
-                ) : (
-
-                  <Text style={styles.text}>{item.text}</Text>
-
-                )}
-
-                <Text style={styles.time}>
-                  {formatTime(item.createdAt)}
-                </Text>
-
-              </View>
-
-            </View>
-
-          );
-
-        }}
+        renderItem={renderItem}
+        contentContainerStyle={{ padding: 12 }}
       />
 
-      <View style={styles.inputRow}>
+      {/* reply preview */}
+      {replyTo && (
+        <View style={styles.replyPreview}>
+          <Text style={{ color: "#4dd0ff" }}>
+            Risposta a: {replyTo.text}
+          </Text>
+        </View>
+      )}
+
+      {/* input */}
+      <View style={styles.inputWrap}>
 
         <TextInput
           value={msg}
-          onChangeText={setMsg}
+          onChangeText={handleTyping}
           style={styles.input}
-          placeholder="Scrivi..."
+          placeholder="Messaggio..."
           placeholderTextColor="#666"
         />
 
         <TouchableOpacity onPress={send} style={styles.send}>
-          <Text>➤</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={recording ? stopRecording : startRecording}
-          style={[
-            styles.mic,
-            { backgroundColor: recording ? "#ff2b2b" : "#ffd700" }
-          ]}
-        >
-          <Text>{recording ? "■" : "🎤"}</Text>
+          <Text style={{ color: "#000" }}>➤</Text>
         </TouchableOpacity>
 
       </View>
@@ -337,42 +320,80 @@ export default function Chat() {
 
 const styles = {
 
-  container: { flex: 1, backgroundColor: "#000", paddingTop: 50 },
+  container: { flex: 1, backgroundColor: "#05060a" },
 
-  header: { padding: 10, borderBottomWidth: 1, borderColor: "#111" },
+  header: {
+    paddingTop: 60,
+    alignItems: "center",
+    paddingBottom: 10
+  },
 
-  title: { color: "#ffd700", textAlign: "center", fontSize: 22 },
+  title: { color: "#4dd0ff", letterSpacing: 3 },
 
-  row: { marginVertical: 6, paddingHorizontal: 10 },
+  typing: {
+    color: "#888",
+    paddingLeft: 10,
+    fontSize: 12
+  },
 
-  bubble: { padding: 10, borderRadius: 15, maxWidth: "80%" },
+  row: { marginVertical: 6 },
 
-  me: { backgroundColor: "#1c1c1c" },
+  bubble: {
+    maxWidth: "78%",
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)"
+  },
 
-  other: { backgroundColor: "#111" },
-
-  user: { fontWeight: "bold", marginBottom: 5 },
+  me: { alignSelf: "flex-end" },
+  other: { alignSelf: "flex-start" },
 
   text: { color: "#fff" },
 
-  time: { color: "#777", fontSize: 10, marginTop: 5, textAlign: "right" },
+  time: { fontSize: 10, color: "#777", marginTop: 6 },
 
-  audioBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10
+  replyBox: {
+    borderLeftWidth: 2,
+    borderLeftColor: "#4dd0ff",
+    paddingLeft: 6,
+    marginBottom: 4
   },
 
-  play: { color: "#fff" },
+  replyText: { color: "#aaa", fontSize: 11 },
 
-  duration: { color: "#ccc", fontSize: 12 },
+  reactions: { flexDirection: "row", marginTop: 4 },
 
-  inputRow: { flexDirection: "row", padding: 10 },
+  dayWrap: { alignItems: "center", marginVertical: 10 },
 
-  input: { flex: 1, backgroundColor: "#111", color: "#fff", borderRadius: 20, padding: 10 },
+  day: { color: "#555", fontSize: 12 },
 
-  send: { width: 45, height: 45, backgroundColor: "#ffd700", justifyContent: "center", alignItems: "center", borderRadius: 100, marginLeft: 8 },
+  inputWrap: {
+    flexDirection: "row",
+    padding: 10,
+    backgroundColor: "#070a12"
+  },
 
-  mic: { width: 45, height: 45, justifyContent: "center", alignItems: "center", borderRadius: 100, marginLeft: 8 }
+  input: {
+    flex: 1,
+    backgroundColor: "#111",
+    color: "#fff",
+    borderRadius: 14,
+    padding: 12
+  },
+
+  send: {
+    width: 44,
+    height: 44,
+    marginLeft: 10,
+    backgroundColor: "#4dd0ff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 12
+  },
+
+  replyPreview: {
+    paddingLeft: 10,
+    paddingBottom: 5
+  }
 
 };
