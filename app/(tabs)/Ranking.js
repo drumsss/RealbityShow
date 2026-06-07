@@ -9,83 +9,74 @@ const { width } = Dimensions.get("window");
 export default function Leaderboard() {
 
   const [players, setPlayers] = useState([]);
-  const [status, setStatus] = useState("loading");
 
   useEffect(() => {
 
-    if (!db) {
-      setStatus("error");
-      console.log("DB NON INIZIALIZZATO");
-      return;
-    }
+    const unsub = onSnapshot(
+      collection(db, "players"),
+      (snap) => {
 
-    let unsub;
+        const raw = snap.docs.map(d => {
+          const v = d.data();
 
-    try {
+          return {
+            id: d.id,
+            // 🔥 FIX MINIMO (NON CAMBIA STRUTTURA)
+            name: (v?.name || d.id || "").toLowerCase().trim(),
+            points: Number(v?.points || 0)
+          };
+        });
 
-      const ref = collection(db, "players");
+        const map = new Map();
 
-      unsub = onSnapshot(
-        ref,
-        (snap) => {
+        raw.forEach(p => {
 
-          const raw = snap.docs.map(d => {
-            const v = d.data();
+          const key = p.name;
 
-            return {
-              id: d.id,
-              name: (v?.name || d.id || "unknown")
-                .toString()
-                .toLowerCase()
-                .trim(),
-              points: Number(v?.points ?? 0)
-            };
-          });
+          if (!map.has(key)) {
+            map.set(key, { ...p });
+          } else {
+            const old = map.get(key);
 
-          // merge duplicati
-          const map = new Map();
+            map.set(key, {
+              ...old,
+              points: old.points + p.points
+            });
+          }
+        });
 
-          raw.forEach(p => {
-            const key = p.name;
+        const cleaned = Array.from(map.values())
+          .sort((a, b) => b.points - a.points);
 
-            if (!map.has(key)) {
-              map.set(key, { ...p });
-            } else {
-              const old = map.get(key);
+        setPlayers(cleaned);
+      }
+    );
 
-              map.set(key, {
-                ...old,
-                points: old.points + p.points
-              });
-            }
-          });
-
-          const cleaned = Array.from(map.values())
-            .sort((a, b) => b.points - a.points);
-
-          setPlayers(cleaned);
-          setStatus("ok");
-        },
-        (err) => {
-
-          console.log("🔥 FIREBASE ERROR CODE:", err.code);
-          console.log("🔥 FIREBASE ERROR MSG:", err.message);
-
-          setStatus("error");
-        }
-      );
-
-    } catch (e) {
-
-      console.log("🔥 INIT ERROR:", e);
-      setStatus("error");
-    }
-
-    return () => {
-      if (unsub) unsub();
-    };
+    return unsub;
 
   }, []);
+
+  const getNameColor = (name) => {
+    const n = (name || "").toLowerCase();
+
+    const blueTeam = ["drums", "chiara", "taddei", "licari"];
+    const purpleTeam = ["ludo", "mimmo", "eli", "draane"];
+
+    if (blueTeam.includes(n)) return "#00d4ff";
+    if (purpleTeam.includes(n)) return "#c77dff";
+    return "#ffffff";
+  };
+
+  const getCardGradient = () => {
+    return ["#1a1a1a", "#0b0b0b"];
+  };
+
+  const getGlowColor = (index) => {
+    if (index === 0) return "#ffd700";
+    if (index === 1) return "#c0c0c0";
+    if (index === 2) return "#cd7f32";
+    return "#00d4ff";
+  };
 
   return (
 
@@ -93,6 +84,9 @@ export default function Leaderboard() {
       colors={["#050505", "#090909", "#160022"]}
       style={styles.container}
     >
+
+      <View style={styles.glow1} />
+      <View style={styles.glow2} />
 
       <Text style={styles.title}>CLASSIFICA</Text>
       <Text style={styles.subtitle}>REALBITY SHOW</Text>
@@ -106,38 +100,56 @@ export default function Leaderboard() {
         showsVerticalScrollIndicator={false}
       >
 
-        {status === "loading" && (
-          <Text style={styles.msg}>
-            CARICAMENTO...
-          </Text>
-        )}
-
-        {status === "error" && (
-          <Text style={[styles.msg, { color: "red" }]}>
-            ERRORE FIREBASE
-          </Text>
-        )}
-
-        {status === "ok" && players.length === 0 && (
-          <Text style={styles.msg}>
-            NESSUN GIOCATORE
-          </Text>
-        )}
-
         {players.map((p, i) => (
 
-          <View key={p.id} style={styles.card}>
+          <LinearGradient
+            key={p.id}
+            colors={getCardGradient(i)}
+            style={[
+              styles.card,
+              { borderColor: getGlowColor(i) }
+            ]}
+          >
 
             <View style={styles.left}>
-              <Text style={styles.rank}>#{i + 1}</Text>
-              <Text style={styles.name}>{p.name}</Text>
+
+              <View style={[
+                styles.rankCircle,
+                { borderColor: getGlowColor(i) }
+              ]}>
+                <Text style={styles.rank}>
+                  #{i + 1}
+                </Text>
+              </View>
+
+              <View>
+
+                {/* 🔥 QUI NON PUÒ PIÙ SPARIRE */}
+                <Text style={[
+                  styles.name,
+                  { color: getNameColor(p.name) }
+                ]}>
+                  {p.name}
+                </Text>
+
+                <Text style={styles.playerLabel}>
+                  PLAYER
+                </Text>
+
+              </View>
+
             </View>
 
-            <Text style={styles.points}>
-              {p.points}
-            </Text>
+            <View style={styles.pointsBox}>
+              <Text style={styles.points}>
+                {p.points}
+              </Text>
+              <Text style={styles.pointsLabel}>
+                PTS
+              </Text>
+            </View>
 
-          </View>
+          </LinearGradient>
 
         ))}
 
@@ -152,57 +164,112 @@ const styles = {
   container: {
     flex: 1,
     paddingTop: 70,
-    alignItems: "center"
+    alignItems: "center",
+    overflow: "hidden"
+  },
+
+  glow1: {
+    position: "absolute",
+    width: 300,
+    height: 300,
+    borderRadius: 999,
+    backgroundColor: "#a020f0",
+    opacity: 0.18,
+    top: -90,
+    right: -100
+  },
+
+  glow2: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 999,
+    backgroundColor: "#00d4ff",
+    opacity: 0.12,
+    bottom: 20,
+    left: -90
   },
 
   title: {
     color: "#fff",
-    fontSize: 40,
-    fontWeight: "900"
+    fontSize: 42,
+    fontWeight: "900",
+    letterSpacing: 2
   },
 
   subtitle: {
     color: "#888",
     fontSize: 12,
-    marginBottom: 20
-  },
-
-  msg: {
-    color: "#777",
-    marginTop: 30
+    letterSpacing: 4,
+    marginTop: 6,
+    marginBottom: 30
   },
 
   card: {
     width: width * 0.92,
-    padding: 18,
-    marginBottom: 12,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    minHeight: 100,
+    borderRadius: 28,
+    marginBottom: 14,
+    paddingHorizontal: 22,
+    paddingVertical: 18,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center"
+    borderWidth: 1.5,
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 25,
+    elevation: 12
   },
 
   left: {
     flexDirection: "row",
+    alignItems: "center"
+  },
+
+  rankCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
     alignItems: "center",
-    gap: 10
+    marginRight: 14,
+    borderWidth: 1
   },
 
   rank: {
     color: "#fff",
-    fontWeight: "900",
-    marginRight: 10
+    fontSize: 18,
+    fontWeight: "900"
   },
 
   name: {
-    color: "#fff",
-    fontWeight: "700"
+    fontSize: 23,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
+
+  playerLabel: {
+    color: "#777",
+    fontSize: 11,
+    letterSpacing: 2,
+    marginTop: 4
+  },
+
+  pointsBox: {
+    alignItems: "center"
   },
 
   points: {
-    color: "#00d4ff",
-    fontWeight: "900",
-    fontSize: 18
+    color: "#fff",
+    fontSize: 36,
+    fontWeight: "900"
+  },
+
+  pointsLabel: {
+    color: "#999",
+    fontSize: 11,
+    letterSpacing: 2
   }
 };
