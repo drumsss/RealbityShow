@@ -15,70 +15,87 @@ export default function Leaderboard() {
 
     if (!db) {
       setStatus("error");
+      console.log("DB NON INIZIALIZZATO");
       return;
     }
 
-    const ref = collection(db, "players");
+    let unsub;
 
-    const unsub = onSnapshot(
-      ref,
-      (snap) => {
+    try {
 
-        const raw = snap.docs.map(d => {
-          const v = d.data();
+      const ref = collection(db, "players");
 
-          return {
-            id: d.id,
-            name: (v?.name || d.id || "").toLowerCase().trim(),
-            points: Number(v?.points || 0)
-          };
-        });
+      unsub = onSnapshot(
+        ref,
+        (snap) => {
 
-        // merge duplicati per nome
-        const map = new Map();
+          const raw = snap.docs.map(d => {
+            const v = d.data();
 
-        raw.forEach(p => {
-          const key = p.name;
+            return {
+              id: d.id,
+              name: (v?.name || d.id || "unknown")
+                .toString()
+                .toLowerCase()
+                .trim(),
+              points: Number(v?.points ?? 0)
+            };
+          });
 
-          if (!map.has(key)) {
-            map.set(key, { ...p });
-          } else {
-            const old = map.get(key);
+          // merge duplicati
+          const map = new Map();
 
-            map.set(key, {
-              ...old,
-              points: old.points + p.points
-            });
-          }
-        });
+          raw.forEach(p => {
+            const key = p.name;
 
-        const cleaned = Array.from(map.values())
-          .sort((a, b) => b.points - a.points);
+            if (!map.has(key)) {
+              map.set(key, { ...p });
+            } else {
+              const old = map.get(key);
 
-        setPlayers(cleaned);
-        setStatus("ok");
-      },
-      (err) => {
-        console.log("FIRESTORE ERROR:", err);
-        setStatus("error");
-      }
-    );
+              map.set(key, {
+                ...old,
+                points: old.points + p.points
+              });
+            }
+          });
 
-    return unsub;
+          const cleaned = Array.from(map.values())
+            .sort((a, b) => b.points - a.points);
+
+          setPlayers(cleaned);
+          setStatus("ok");
+        },
+        (err) => {
+
+          console.log("🔥 FIREBASE ERROR CODE:", err.code);
+          console.log("🔥 FIREBASE ERROR MSG:", err.message);
+
+          setStatus("error");
+        }
+      );
+
+    } catch (e) {
+
+      console.log("🔥 INIT ERROR:", e);
+      setStatus("error");
+    }
+
+    return () => {
+      if (unsub) unsub();
+    };
 
   }, []);
 
   return (
+
     <LinearGradient
       colors={["#050505", "#090909", "#160022"]}
       style={styles.container}
     >
 
       <Text style={styles.title}>CLASSIFICA</Text>
-
-      <Text style={styles.subtitle}>
-        REALBITY SHOW
-      </Text>
+      <Text style={styles.subtitle}>REALBITY SHOW</Text>
 
       <ScrollView
         style={{ width: "100%" }}
@@ -90,24 +107,25 @@ export default function Leaderboard() {
       >
 
         {status === "loading" && (
-          <Text style={{ color: "#777", marginTop: 30 }}>
+          <Text style={styles.msg}>
             CARICAMENTO...
           </Text>
         )}
 
+        {status === "error" && (
+          <Text style={[styles.msg, { color: "red" }]}>
+            ERRORE FIREBASE
+          </Text>
+        )}
+
         {status === "ok" && players.length === 0 && (
-          <Text style={{ color: "#777", marginTop: 30 }}>
+          <Text style={styles.msg}>
             NESSUN GIOCATORE
           </Text>
         )}
 
-        {status === "error" && (
-          <Text style={{ color: "red", marginTop: 30 }}>
-            ERRORE FIRESTORE
-          </Text>
-        )}
-
         {players.map((p, i) => (
+
           <View key={p.id} style={styles.card}>
 
             <View style={styles.left}>
@@ -115,9 +133,12 @@ export default function Leaderboard() {
               <Text style={styles.name}>{p.name}</Text>
             </View>
 
-            <Text style={styles.points}>{p.points}</Text>
+            <Text style={styles.points}>
+              {p.points}
+            </Text>
 
           </View>
+
         ))}
 
       </ScrollView>
@@ -131,8 +152,7 @@ const styles = {
   container: {
     flex: 1,
     paddingTop: 70,
-    alignItems: "center",
-    backgroundColor: "#000"
+    alignItems: "center"
   },
 
   title: {
@@ -145,6 +165,11 @@ const styles = {
     color: "#888",
     fontSize: 12,
     marginBottom: 20
+  },
+
+  msg: {
+    color: "#777",
+    marginTop: 30
   },
 
   card: {
