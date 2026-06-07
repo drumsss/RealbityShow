@@ -1,14 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Dimensions,
-  ScrollView,
-  Text,
-  View
-} from "react-native";
-
 import { LinearGradient } from "expo-linear-gradient";
 import { collection, onSnapshot } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { Dimensions, ScrollView, Text, View } from "react-native";
 import { db } from "../../firebase";
 
 const { width } = Dimensions.get("window");
@@ -16,36 +9,42 @@ const { width } = Dimensions.get("window");
 export default function Leaderboard() {
 
   const [players, setPlayers] = useState([]);
-
-  // 🎬 LOGO ANIM
-  const logoScale = useRef(new Animated.Value(0.6)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoTranslate = useRef(new Animated.Value(-20)).current;
-  const logoGlow = useRef(new Animated.Value(0)).current;
-
-  const glitchX = useRef(new Animated.Value(0)).current;
-  const glitchOpacity = useRef(new Animated.Value(1)).current;
+  const [status, setStatus] = useState("loading");
 
   useEffect(() => {
 
+    if (!db) {
+      console.log("❌ DB NON INIZIALIZZATO");
+      return;
+    }
+
+    const ref = collection(db, "players");
+
+    console.log("🔥 LISTENER START players");
+
     const unsub = onSnapshot(
-      collection(db, "players"),
+      ref,
       (snap) => {
 
-        const raw = snap.docs.map(d => {
+        console.log("🔥 SNAP OK SIZE:", snap.size);
+        setStatus("ok");
+
+        const list = [];
+
+        snap.forEach((d) => {
           const v = d.data();
 
-          return {
+          list.push({
             id: d.id,
-            name: (v.name || d.id || "").toLowerCase().trim(),
-            points: Number(v.points || 0)
-          };
+            name: (v?.name ?? d.id ?? "").toLowerCase().trim(),
+            points: Number(v?.points ?? 0)
+          });
         });
 
+        // 🔥 merge duplicati (safe)
         const map = new Map();
 
-        raw.forEach(p => {
-
+        for (const p of list) {
           const key = p.name;
 
           if (!map.has(key)) {
@@ -54,94 +53,26 @@ export default function Leaderboard() {
             const old = map.get(key);
 
             map.set(key, {
-              ...old,
+              id: old.id,
+              name: old.name,
               points: old.points + p.points
             });
           }
-        });
+        }
 
         const cleaned = Array.from(map.values());
+
         cleaned.sort((a, b) => b.points - a.points);
 
         setPlayers(cleaned);
+      },
+      (err) => {
+        console.log("❌ FIRESTORE ERROR:", err);
+        setStatus("error");
       }
     );
 
-    // 🎬 INTRO LOGO
-    Animated.sequence([
-
-      Animated.parallel([
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true
-        }),
-        Animated.timing(logoTranslate, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: true
-        })
-      ]),
-
-      Animated.timing(logoScale, {
-        toValue: 1.15,
-        duration: 350,
-        useNativeDriver: true
-      }),
-
-      Animated.timing(logoScale, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true
-      })
-
-    ]).start(() => {
-
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(logoGlow, {
-            toValue: 1,
-            duration: 1200,
-            useNativeDriver: false
-          }),
-          Animated.timing(logoGlow, {
-            toValue: 0,
-            duration: 1200,
-            useNativeDriver: false
-          })
-        ])
-      ).start();
-
-    });
-
-    // 📺 GLITCH LOOP
-    const interval = setInterval(() => {
-
-      if (Math.random() > 0.7) {
-
-        const rx = (Math.random() - 0.5) * 5;
-
-        Animated.sequence([
-          Animated.timing(glitchX, {
-            toValue: rx,
-            duration: 60,
-            useNativeDriver: true
-          }),
-          Animated.timing(glitchX, {
-            toValue: 0,
-            duration: 80,
-            useNativeDriver: true
-          })
-        ]).start();
-
-      }
-
-    }, 2500);
-
-    return () => {
-      unsub();
-      clearInterval(interval);
-    };
+    return unsub;
 
   }, []);
 
@@ -155,20 +86,17 @@ export default function Leaderboard() {
     if (blueTeam.includes(n)) return "#00d4ff";
     if (purpleTeam.includes(n)) return "#c77dff";
 
-    return "#ffffff";
+    return "#fff";
   };
 
-  const getCardGradient = () => ["#1a1a1a", "#0b0b0b"];
-
-  const getGlowColor = (index) => {
-    if (index === 0) return "#ffd700";
-    if (index === 1) return "#c0c0c0";
-    if (index === 2) return "#cd7f32";
+  const getGlowColor = (i) => {
+    if (i === 0) return "#ffd700";
+    if (i === 1) return "#c0c0c0";
+    if (i === 2) return "#cd7f32";
     return "#00d4ff";
   };
 
   return (
-
     <LinearGradient
       colors={["#050505", "#090909", "#160022"]}
       style={styles.container}
@@ -177,38 +105,11 @@ export default function Leaderboard() {
       <View style={styles.glow1} />
       <View style={styles.glow2} />
 
-      {/* 🎬 LOGO */}
-      <Animated.View
-        style={[
-          styles.logoWrap,
-          {
-            opacity: logoOpacity,
-            transform: [
-              { translateY: logoTranslate },
-              { scale: logoScale },
-              { translateX: glitchX }
-            ],
-            shadowOpacity: logoGlow.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.2, 0.9]
-            })
-          }
-        ]}
-      >
-
-        <Animated.Image
-          source={require("../../assets/logo_bw.png")}
-          style={[
-            styles.logo,
-            { opacity: glitchOpacity }
-          ]}
-          resizeMode="contain"
-        />
-
-      </Animated.View>
-
       <Text style={styles.title}>CLASSIFICA</Text>
-      <Text style={styles.subtitle}>REALBITY SHOW</Text>
+
+      <Text style={styles.subtitle}>
+        STATUS: {status}
+      </Text>
 
       <ScrollView
         style={{ width: "100%" }}
@@ -219,11 +120,22 @@ export default function Leaderboard() {
         showsVerticalScrollIndicator={false}
       >
 
+        {status === "loading" && (
+          <Text style={{ color: "#777", marginTop: 30 }}>
+            CARICAMENTO...
+          </Text>
+        )}
+
+        {status === "ok" && players.length === 0 && (
+          <Text style={{ color: "#777", marginTop: 30 }}>
+            NESSUN GIOCATORE
+          </Text>
+        )}
+
         {players.map((p, i) => (
 
-          <LinearGradient
-            key={p.name}
-            colors={getCardGradient(i)}
+          <View
+            key={p.id}
             style={[
               styles.card,
               { borderColor: getGlowColor(i) }
@@ -236,45 +148,28 @@ export default function Leaderboard() {
                 styles.rankCircle,
                 { borderColor: getGlowColor(i) }
               ]}>
-
-                <Text style={styles.rank}>
-                  #{i + 1}
-                </Text>
-
+                <Text style={styles.rank}>#{i + 1}</Text>
               </View>
 
               <View>
-
-                <Text
-                  style={[
-                    styles.name,
-                    { color: getNameColor(p.name) }
-                  ]}
-                >
+                <Text style={[
+                  styles.name,
+                  { color: getNameColor(p.name) }
+                ]}>
                   {p.name}
                 </Text>
 
-                <Text style={styles.playerLabel}>
-                  PLAYER
-                </Text>
-
+                <Text style={styles.playerLabel}>PLAYER</Text>
               </View>
 
             </View>
 
             <View style={styles.pointsBox}>
-
-              <Text style={styles.points}>
-                {p.points}
-              </Text>
-
-              <Text style={styles.pointsLabel}>
-                PTS
-              </Text>
-
+              <Text style={styles.points}>{p.points}</Text>
+              <Text style={styles.pointsLabel}>PTS</Text>
             </View>
 
-          </LinearGradient>
+          </View>
 
         ))}
 
@@ -289,8 +184,7 @@ const styles = {
   container: {
     flex: 1,
     paddingTop: 70,
-    alignItems: "center",
-    overflow: "hidden"
+    alignItems: "center"
   },
 
   glow1: {
@@ -315,31 +209,15 @@ const styles = {
     left: -90
   },
 
-  logoWrap: {
-    marginTop: 10,
-    marginBottom: 10,
-    shadowColor: "#00d4ff",
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 12
-  },
-
-  logo: {
-    width: 70,
-    height: 70
-  },
-
   title: {
     color: "#fff",
     fontSize: 42,
-    fontWeight: "900",
-    letterSpacing: 2
+    fontWeight: "900"
   },
 
   subtitle: {
     color: "#888",
     fontSize: 12,
-    letterSpacing: 4,
     marginTop: 6,
     marginBottom: 30
   },
@@ -352,12 +230,9 @@ const styles = {
     paddingHorizontal: 22,
     paddingVertical: 18,
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     borderWidth: 1.5,
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 25,
     elevation: 12
   },
 
@@ -385,14 +260,12 @@ const styles = {
 
   name: {
     fontSize: 23,
-    fontWeight: "900",
-    letterSpacing: 1
+    fontWeight: "900"
   },
 
   playerLabel: {
     color: "#777",
     fontSize: 11,
-    letterSpacing: 2,
     marginTop: 4
   },
 
@@ -408,8 +281,6 @@ const styles = {
 
   pointsLabel: {
     color: "#999",
-    fontSize: 11,
-    letterSpacing: 2
+    fontSize: 11
   }
-
 };
